@@ -98,6 +98,7 @@ impl LimitOrderBook {
         let mut events = Vec::new();
 
         events.push(emit(&mut self.next_seq, EventKind::Accepted { order_id }));
+        let order_seq = self.next_seq;
 
         let mut remaining_qty = qty;
         self.match_order(order_id, side, price, &mut remaining_qty, &mut events);
@@ -113,7 +114,7 @@ impl LimitOrderBook {
                     price,
                     qty: remaining_qty,
                     remaining_qty,
-                    sequence: self.next_seq,
+                    sequence: order_seq,
                 },
             );
 
@@ -151,11 +152,12 @@ impl LimitOrderBook {
         }
         let mut events = Vec::new();
 
+        events.push(emit(&mut self.next_seq, EventKind::Accepted { order_id }));
+
         let price = match side {
             Side::Buy => Price::MAX,
             Side::Sell => Price::MIN,
         };
-
         let mut qty = qty;
         self.match_order(order_id, side, price, &mut qty, &mut events);
 
@@ -241,7 +243,7 @@ impl LimitOrderBook {
                 }
             };
 
-            Self::fullfill_in_price_level(
+            Self::fulfill_in_price_level(
                 price_level,
                 &mut self.orders,
                 events,
@@ -263,7 +265,7 @@ impl LimitOrderBook {
         }
     }
 
-    fn fullfill_in_price_level(
+    fn fulfill_in_price_level(
         price_level: &mut PriceLevel,
         orders: &mut HashMap<OrderId, Order>,
         events: &mut Vec<Event>,
@@ -278,7 +280,6 @@ impl LimitOrderBook {
                 let passive_remaining_qty = passive_order.remaining_qty;
                 let price = passive_order.price;
 
-                // BUG here use saturating_sub:
                 let fill_qty = passive_remaining_qty.min(*qty);
                 events.push(emit(
                     next_seq,
