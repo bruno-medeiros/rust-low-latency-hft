@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::types::{OrderId, Price, Qty};
+use crate::types::{OrderId, Qty};
 
 #[derive(Debug)]
 pub(crate) struct PriceLevel {
@@ -34,6 +34,8 @@ impl PriceLevel {
         if let Some(pos) = self.orders.iter().position(|&id| id == order_id) {
             self.orders.remove(pos);
             self.total_qty -= qty;
+        } else {
+            assert!(false, "Order not found in price level");
         }
     }
 

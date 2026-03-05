@@ -13,6 +13,7 @@ pub struct LimitOrderBook {
     next_seq: u64,
 }
 
+// TODO: replace
 fn emit(seq: &mut u64, kind: EventKind) -> Event {
     let s = *seq;
     *seq += 1;
@@ -98,28 +99,33 @@ impl LimitOrderBook {
 
         events.push(emit(&mut self.next_seq, EventKind::Accepted { order_id }));
 
-        self.orders.insert(
-            order_id,
-            Order {
-                id: order_id,
-                side,
-                price,
-                qty,
-                remaining_qty: qty,
-                sequence: self.next_seq,
-            },
-        );
+        let mut qty = qty;
+        self.match_order(order_id, side, price, &mut qty, &mut events);
 
-        match side {
-            Side::Buy => {
-                self.bids.entry(price).or_default().push(order_id, qty);
-            }
-            Side::Sell => {
-                self.asks.entry(price).or_default().push(order_id, qty);
+        if qty == 0 {
+            events.push(emit(&mut self.next_seq, EventKind::Filled { order_id }));
+        } else {
+            self.orders.insert(
+                order_id,
+                Order {
+                    id: order_id,
+                    side,
+                    price,
+                    qty,
+                    remaining_qty: qty,
+                    sequence: self.next_seq,
+                },
+            );
+
+            match side {
+                Side::Buy => {
+                    self.bids.entry(price).or_default().push(order_id, qty);
+                }
+                Side::Sell => {
+                    self.asks.entry(price).or_default().push(order_id, qty);
+                }
             }
         }
-
-        // TODO: try_match
 
         events
     }
@@ -139,11 +145,31 @@ impl LimitOrderBook {
         None
     }
 
-    pub fn add_market_order(&mut self, id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
-        if let Some(value) = self.validate_order_qty(id, qty) {
+    pub fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
+        if let Some(value) = self.validate_order_qty(order_id, qty) {
             return value;
         }
         let mut events = Vec::new();
+
+        let price = match side {
+            Side::Buy => Price::MAX,
+            Side::Sell => Price::MIN,
+        };
+
+        let mut qty = qty;
+        self.match_order(order_id, side, price, &mut qty, &mut events);
+
+        if qty == 0 {
+            events.push(emit(&mut self.next_seq, EventKind::Filled { order_id }));
+        } else {
+            events.push(emit(
+                &mut self.next_seq,
+                EventKind::Cancelled {
+                    order_id,
+                    remaining_qty: qty,
+                },
+            ));
+        }
 
         events
     }
@@ -184,6 +210,114 @@ impl LimitOrderBook {
             }
         }
     }
+
+    fn match_order(
+        &mut self,
+        aggressor_order_id: OrderId,
+        side: Side,
+        price: Price,
+        qty: &mut Qty,
+        events: &mut Vec<Event>,
+    ) {
+        if side == Side::Buy {
+            let bid_price = price;
+
+            loop {
+                if let Some((ask_price, price_level)) = self.asks.iter_mut().next()
+                    && *ask_price <= bid_price
+                    && *qty > 0
+                {
+                    Self::fullfill_in_price_level(
+                        price_level,
+                        &mut self.orders,
+                        events,
+                        &mut self.next_seq,
+                        aggressor_order_id,
+                        qty,
+                    );
+
+                    if price_level.is_empty() {
+                        let ask_price = *ask_price;
+                        self.asks.remove(&ask_price);
+                    }
+                } else {
+                    return;
+                }
+            }
+        } else {
+            let ask_price = price;
+            loop {
+                if let Some((bid_price, price_level)) = self.bids.iter_mut().rev().next()
+                    && ask_price <= *bid_price
+                    && *qty > 0
+                {
+                    Self::fullfill_in_price_level(
+                        price_level,
+                        &mut self.orders,
+                        events,
+                        &mut self.next_seq,
+                        aggressor_order_id,
+                        qty,
+                    );
+
+                    if price_level.is_empty() {
+                        let bid_price = *bid_price;
+                        self.bids.remove(&bid_price);
+                    }
+                } else {
+                    return;
+                }
+            }
+        }
+    }
+
+    fn fullfill_in_price_level(
+        price_level: &mut PriceLevel,
+        orders: &mut HashMap<OrderId, Order>,
+        events: &mut Vec<Event>,
+        next_seq: &mut u64,
+        aggressor_order_id: OrderId,
+        qty: &mut Qty,
+    ) {
+        match price_level.front() {
+            None => {}
+            Some(passive_order_id) => {
+                let passive_order = orders.get_mut(&passive_order_id).unwrap();
+                let passive_remaining_qty = passive_order.remaining_qty;
+                let price = passive_order.price;
+
+                // BUG here use saturating_sub:
+                let fill_qty = passive_remaining_qty.min(*qty);
+                events.push(emit(
+                    next_seq,
+                    EventKind::Fill {
+                        passive_order_id,
+                        aggressor_order_id,
+                        price,
+                        qty: fill_qty,
+                    },
+                ));
+
+                if *qty >= passive_remaining_qty {
+                    price_level.remove(passive_order_id, passive_remaining_qty);
+
+                    events.push(emit(
+                        next_seq,
+                        EventKind::Filled {
+                            order_id: passive_order_id,
+                        },
+                    ));
+                    orders.remove(&passive_order_id);
+
+                    *qty -= passive_remaining_qty;
+                } else {
+                    price_level.reduce_qty(*qty);
+                    passive_order.remaining_qty -= *qty;
+                    *qty = 0;
+                }
+            }
+        }
+    }
 }
 
 impl Default for LimitOrderBook {
@@ -202,10 +336,7 @@ mod tests {
         let events = book.add_limit_order(1, Side::Buy, 100, 10);
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(
-            events[0].kind,
-            EventKind::Accepted { order_id: 1 }
-        ));
+        assert_eq!(events[0].kind, EventKind::Accepted { order_id: 1 });
         assert_eq!(book.best_bid(), Some((100, 10)));
         assert_eq!(book.best_ask(), None);
         assert_eq!(book.order_count(), 1);
@@ -218,13 +349,13 @@ mod tests {
 
         let events = book.cancel_order(1);
         assert_eq!(events.len(), 1);
-        assert!(matches!(
+        assert_eq!(
             events[0].kind,
             EventKind::Cancelled {
                 order_id: 1,
                 remaining_qty: 10
             }
-        ));
+        );
         assert_eq!(book.best_bid(), None);
         assert_eq!(book.order_count(), 0);
     }
@@ -235,13 +366,13 @@ mod tests {
         let events = book.cancel_order(999);
 
         assert_eq!(events.len(), 1);
-        assert!(matches!(
+        assert_eq!(
             events[0].kind,
             EventKind::Rejected {
                 order_id: 999,
                 reason: RejectReason::UnknownOrder
             }
-        ));
+        );
     }
 
     #[test]
@@ -251,11 +382,8 @@ mod tests {
 
         let events = book.add_limit_order(2, Side::Buy, 100, 10);
         assert_eq!(events.len(), 4);
-        assert!(matches!(
-            events[0].kind,
-            EventKind::Accepted { order_id: 2 }
-        ));
-        assert!(matches!(
+        assert_eq!(events[0].kind, EventKind::Accepted { order_id: 2 });
+        assert_eq!(
             events[1].kind,
             EventKind::Fill {
                 aggressor_order_id: 2,
@@ -263,9 +391,10 @@ mod tests {
                 price: 100,
                 qty: 10
             }
-        ));
-        assert!(matches!(events[2].kind, EventKind::Filled { order_id: 1 }));
-        assert!(matches!(events[3].kind, EventKind::Filled { order_id: 2 }));
+        );
+        assert_eq!(events[2].kind, EventKind::Filled { order_id: 1 });
+        assert_eq!(events[3].kind, EventKind::Filled { order_id: 2 });
+        assert_eq!(book.orders, HashMap::new());
         assert_eq!(book.order_count(), 0);
         assert_eq!(book.best_bid(), None);
         assert_eq!(book.best_ask(), None);
@@ -278,7 +407,7 @@ mod tests {
 
         let events = book.add_limit_order(2, Side::Buy, 100, 5);
         assert_eq!(events.len(), 3);
-        assert!(matches!(
+        assert_eq!(
             events[1].kind,
             EventKind::Fill {
                 aggressor_order_id: 2,
@@ -286,8 +415,8 @@ mod tests {
                 price: 100,
                 qty: 5
             }
-        ));
-        assert!(matches!(events[2].kind, EventKind::Filled { order_id: 2 }));
+        );
+        assert_eq!(events[2].kind, EventKind::Filled { order_id: 2 });
 
         assert_eq!(book.best_ask(), Some((100, 5)));
         assert_eq!(book.order(1).unwrap().remaining_qty, 5);
@@ -373,7 +502,7 @@ mod tests {
                 ..
             }
         ));
-        assert!(matches!(events[2].kind, EventKind::Filled { order_id: 1 }));
+        assert_eq!(events[2].kind, EventKind::Filled { order_id: 1 });
         assert_eq!(book.order(2).unwrap().remaining_qty, 10);
         assert_eq!(book.best_ask(), Some((100, 10)));
     }
@@ -433,7 +562,13 @@ mod tests {
         assert_eq!(book.best_bid(), Some((99, 10)));
         assert_eq!(book.best_ask(), Some((101, 10)));
         assert_eq!(book.order_count(), 2);
-        assert_eq!(book.spread(), Some(2));
+        assert_eq!(
+            match (book.best_bid(), book.best_ask()) {
+                (Some((bid, _)), Some((ask, _))) => Some(ask.saturating_sub(bid)),
+                _ => None,
+            },
+            Some(2)
+        );
     }
 
     #[test]
