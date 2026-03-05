@@ -29,6 +29,13 @@ All commands return a sequence of events: `Accepted`, `Fill`, `Filled`, `Cancell
 - **Partial fills.** An incoming order can match across multiple resting orders and price levels.
 - Every event carries a monotonically increasing sequence number for deterministic replay.
 
+## Benchmarks
+
+```bash
+cargo bench --bench lob_bench      # Criterion micro-benchmarks
+cargo bench --bench lob_latency    # Latency distribution (HdrHistogram, p50–p99.9)
+```
+
 ## Non-functional Requirements
 
 - **Latency.** All operations target single-digit microsecond latency. Best bid/ask queries must be the fastest path.
