@@ -244,7 +244,7 @@ impl LimitOrderBook {
                     }
                 }
                 Side::Sell => {
-                    if let Some((bid_price, price_level)) = self.bids.iter_mut().rev().next()
+                    if let Some((bid_price, price_level)) = self.bids.iter_mut().next_back()
                         && price <= *bid_price
                     {
                         (*bid_price, price_level)
@@ -900,11 +900,11 @@ mod tests {
         ));
 
         assert!(
-            orders.get(&1).is_none(),
+            !orders.contains_key(&1),
             "order 1 fully filled — should be removed"
         );
         assert!(
-            orders.get(&2).is_none(),
+            !orders.contains_key(&2),
             "order 2 fully filled — should be removed"
         );
         let o3 = orders

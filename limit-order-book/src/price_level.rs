@@ -25,9 +25,9 @@ impl PriceLevel {
         self.orders.front().copied()
     }
 
-    pub fn pop_front(&mut self) {
-        self.orders.pop_front();
-    }
+    // pub fn pop_front(&mut self) {
+    //     self.orders.pop_front();
+    // }
 
     /// TODO: O(n) scan — acceptable for Phase 1, replace with intrusive list or arena later.
     pub fn remove(&mut self, order_id: OrderId, qty: Qty) {
@@ -35,7 +35,7 @@ impl PriceLevel {
             self.orders.remove(pos);
             self.total_qty -= qty;
         } else {
-            assert!(false, "Order not found in price level");
+            panic!("Order not found in price level");
         }
     }
 
