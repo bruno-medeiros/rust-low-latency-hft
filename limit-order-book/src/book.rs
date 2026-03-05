@@ -14,7 +14,6 @@ pub struct LimitOrderBook {
     next_seq: u64,
 }
 
-// TODO: replace
 fn emit(seq: &mut u64, kind: EventKind) -> Event {
     let s = *seq;
     *seq += 1;
@@ -29,6 +28,10 @@ impl LimitOrderBook {
             orders: HashMap::new(),
             next_seq: 0,
         }
+    }
+
+    fn emit(&mut self, kind: EventKind) -> Event {
+        emit(&mut self.next_seq, kind)
     }
 
     // -- queries -----------------------------------------------------------
@@ -95,36 +98,28 @@ impl LimitOrderBook {
             return value;
         }
         if price == 0 {
-            let err_event = emit(
-                &mut self.next_seq,
-                EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::InvalidPrice,
-                },
-            );
-            return vec![err_event];
+            return vec![self.emit(EventKind::Rejected {
+                order_id,
+                reason: RejectReason::InvalidPrice,
+            })];
         }
 
         if self.orders.contains_key(&order_id) {
-            let err_event = emit(
-                &mut self.next_seq,
-                EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::DuplicateOrderId,
-                },
-            );
-            return vec![err_event];
+            return vec![self.emit(EventKind::Rejected {
+                order_id,
+                reason: RejectReason::DuplicateOrderId,
+            })];
         }
         let mut events = Vec::new();
 
-        events.push(emit(&mut self.next_seq, EventKind::Accepted { order_id }));
+        events.push(self.emit(EventKind::Accepted { order_id }));
         let order_seq = self.next_seq;
 
         let mut remaining_qty = qty;
         self.match_order(order_id, side, price, &mut remaining_qty, &mut events);
 
         if remaining_qty == 0 {
-            events.push(emit(&mut self.next_seq, EventKind::Filled { order_id }));
+            events.push(self.emit(EventKind::Filled { order_id }));
         } else {
             self.orders.insert(
                 order_id,
@@ -153,14 +148,10 @@ impl LimitOrderBook {
 
     fn validate_order_qty(&mut self, id: OrderId, qty: Qty) -> Option<Vec<Event>> {
         if qty == 0 {
-            let err_event = emit(
-                &mut self.next_seq,
-                EventKind::Rejected {
-                    order_id: id,
-                    reason: RejectReason::InvalidQuantity,
-                },
-            );
-            return Some(vec![err_event]);
+            return Some(vec![self.emit(EventKind::Rejected {
+                order_id: id,
+                reason: RejectReason::InvalidQuantity,
+            })]);
         }
 
         None
@@ -171,18 +162,14 @@ impl LimitOrderBook {
             return value;
         }
         if self.orders.contains_key(&order_id) {
-            let err_event = emit(
-                &mut self.next_seq,
-                EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::DuplicateOrderId,
-                },
-            );
-            return vec![err_event];
+            return vec![self.emit(EventKind::Rejected {
+                order_id,
+                reason: RejectReason::DuplicateOrderId,
+            })];
         }
         let mut events = Vec::new();
 
-        events.push(emit(&mut self.next_seq, EventKind::Accepted { order_id }));
+        events.push(self.emit(EventKind::Accepted { order_id }));
 
         let price = match side {
             Side::Buy => Price::MAX,
@@ -192,15 +179,12 @@ impl LimitOrderBook {
         self.match_order(order_id, side, price, &mut qty, &mut events);
 
         if qty == 0 {
-            events.push(emit(&mut self.next_seq, EventKind::Filled { order_id }));
+            events.push(self.emit(EventKind::Filled { order_id }));
         } else {
-            events.push(emit(
-                &mut self.next_seq,
-                EventKind::Cancelled {
-                    order_id,
-                    remaining_qty: qty,
-                },
-            ));
+            events.push(self.emit(EventKind::Cancelled {
+                order_id,
+                remaining_qty: qty,
+            }));
         }
 
         events
@@ -209,14 +193,10 @@ impl LimitOrderBook {
     pub fn cancel_order(&mut self, id: OrderId) -> Vec<Event> {
         match self.orders.remove(&id) {
             None => {
-                let event = emit(
-                    &mut self.next_seq,
-                    EventKind::Rejected {
-                        order_id: id,
-                        reason: RejectReason::UnknownOrder,
-                    },
-                );
-                vec![event]
+                vec![self.emit(EventKind::Rejected {
+                    order_id: id,
+                    reason: RejectReason::UnknownOrder,
+                })]
             }
             Some(order) => {
                 let mut events = Vec::new();
@@ -234,13 +214,10 @@ impl LimitOrderBook {
                     }
                 };
 
-                events.push(emit(
-                    &mut self.next_seq,
-                    EventKind::Cancelled {
-                        order_id: id,
-                        remaining_qty: order.remaining_qty,
-                    },
-                ));
+                events.push(self.emit(EventKind::Cancelled {
+                    order_id: id,
+                    remaining_qty: order.remaining_qty,
+                }));
 
                 events
             }
