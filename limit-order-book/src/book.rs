@@ -99,10 +99,10 @@ impl LimitOrderBook {
 
         events.push(emit(&mut self.next_seq, EventKind::Accepted { order_id }));
 
-        let mut qty = qty;
-        self.match_order(order_id, side, price, &mut qty, &mut events);
+        let mut remaining_qty = qty;
+        self.match_order(order_id, side, price, &mut remaining_qty, &mut events);
 
-        if qty == 0 {
+        if remaining_qty == 0 {
             events.push(emit(&mut self.next_seq, EventKind::Filled { order_id }));
         } else {
             self.orders.insert(
@@ -111,20 +111,20 @@ impl LimitOrderBook {
                     id: order_id,
                     side,
                     price,
-                    qty,
-                    remaining_qty: qty,
+                    qty: remaining_qty,
+                    remaining_qty,
                     sequence: self.next_seq,
                 },
             );
 
-            match side {
-                Side::Buy => {
-                    self.bids.entry(price).or_default().push(order_id, qty);
-                }
-                Side::Sell => {
-                    self.asks.entry(price).or_default().push(order_id, qty);
-                }
-            }
+            let same_side = match side {
+                Side::Buy => &mut self.bids,
+                Side::Sell => &mut self.asks,
+            };
+            same_side
+                .entry(price)
+                .or_default()
+                .push(order_id, remaining_qty);
         }
 
         events
@@ -219,53 +219,45 @@ impl LimitOrderBook {
         qty: &mut Qty,
         events: &mut Vec<Event>,
     ) {
-        if side == Side::Buy {
-            let bid_price = price;
-
-            loop {
-                if let Some((ask_price, price_level)) = self.asks.iter_mut().next()
-                    && *ask_price <= bid_price
-                    && *qty > 0
-                {
-                    Self::fullfill_in_price_level(
-                        price_level,
-                        &mut self.orders,
-                        events,
-                        &mut self.next_seq,
-                        aggressor_order_id,
-                        qty,
-                    );
-
-                    if price_level.is_empty() {
-                        let ask_price = *ask_price;
-                        self.asks.remove(&ask_price);
+        while *qty > 0 {
+            let (matched_price, price_level) = match side {
+                Side::Buy => {
+                    if let Some((ask_price, price_level)) = self.asks.iter_mut().next()
+                        && *ask_price <= price
+                    {
+                        (*ask_price, price_level)
+                    } else {
+                        return;
                     }
-                } else {
-                    return;
                 }
-            }
-        } else {
-            let ask_price = price;
-            loop {
-                if let Some((bid_price, price_level)) = self.bids.iter_mut().rev().next()
-                    && ask_price <= *bid_price
-                    && *qty > 0
-                {
-                    Self::fullfill_in_price_level(
-                        price_level,
-                        &mut self.orders,
-                        events,
-                        &mut self.next_seq,
-                        aggressor_order_id,
-                        qty,
-                    );
-
-                    if price_level.is_empty() {
-                        let bid_price = *bid_price;
-                        self.bids.remove(&bid_price);
+                Side::Sell => {
+                    if let Some((bid_price, price_level)) = self.bids.iter_mut().rev().next()
+                        && price <= *bid_price
+                    {
+                        (*bid_price, price_level)
+                    } else {
+                        return;
                     }
-                } else {
-                    return;
+                }
+            };
+
+            Self::fullfill_in_price_level(
+                price_level,
+                &mut self.orders,
+                events,
+                &mut self.next_seq,
+                aggressor_order_id,
+                qty,
+            );
+
+            if price_level.is_empty() {
+                match side {
+                    Side::Buy => {
+                        self.asks.remove(&matched_price);
+                    }
+                    Side::Sell => {
+                        self.bids.remove(&matched_price);
+                    }
                 }
             }
         }
