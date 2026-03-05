@@ -79,17 +79,6 @@ This project lets you confront all of these constraints in a focused, self-conta
 
 - **Event Sequence Numbering** — Every event gets a monotonically increasing sequence number for deterministic replay.
 
-### Multi-Symbol Support (stretch)
-
-- **Instrument Registry** — Support multiple independent order books, one per instrument/symbol.
-
-- **Symbol Routing** — Incoming messages specify a symbol; the engine routes to the correct book.
-
-### Market Data Feed (stretch)
-
-- **L2 Market Data** — Publish a top-of-book or depth-of-book update after every state change (order add, cancel, trade).
-
-- **Trade Tape** — Publish a stream of all executed trades with price, quantity, aggressor side, and timestamp.
 
 ---
 
