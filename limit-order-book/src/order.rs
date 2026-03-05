@@ -1,6 +1,6 @@
 use crate::types::{OrderId, Price, Qty, Side};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Order {
     /// Unique identifier assigned by the caller; used to reference
     /// this order in cancel/modify requests and fill reports.
