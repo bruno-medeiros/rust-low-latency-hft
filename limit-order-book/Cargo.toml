@@ -7,8 +7,8 @@ rust-version.workspace = true
 [dependencies]
 
 [dev-dependencies]
+bench-tool = { path = "../bench-tool" }
 criterion = { version = "0.5", features = ["html_reports"] }
-hdrhistogram = "7"
 
 [[bench]]
 name = "lob_bench"

@@ -29,15 +29,35 @@ All commands return a sequence of events: `Accepted`, `Fill`, `Filled`, `Cancell
 - **Partial fills.** An incoming order can match across multiple resting orders and price levels.
 - Every event carries a monotonically increasing sequence number for deterministic replay.
 
-## Benchmarks
-
-```bash
-cargo bench --bench lob_bench      # Criterion micro-benchmarks
-cargo bench --bench lob_latency    # Latency distribution (HdrHistogram, p50–p99.9)
-```
-
-## Non-functional Requirements
+### Non-functional Requirements
 
 - **Latency.** All operations target single-digit microsecond latency. Best bid/ask queries must be the fastest path.
 - **Determinism.** Identical input sequences must produce identical output sequences — no non-deterministic behavior.
 - **No allocation on the hot path.** The critical matching loop must not trigger heap allocations during steady-state operation.
+
+## Benchmarks
+
+### Criterion (throughput)
+
+```bash
+cargo bench --bench lob_bench
+```
+
+### Latency distribution
+
+The `lob_latency` benchmark measures per-operation latency percentiles and
+heap allocations using [HdrHistogram](https://crates.io/crates/hdrhistogram)
+and [stats_alloc](https://crates.io/crates/stats_alloc). It reports hardware
+metadata, latency tables (min through p99.9), and allocation counts/bytes for
+each scenario.
+
+```bash
+# Save report as JSON (for future baseline comparison) and Markdown
+cargo bench --bench lob_latency -- --save-json baseline.json --save-md bench-results/baseline.md
+```
+
+```bash
+# Full workflow: compare against baseline and save new one
+cargo bench --bench lob_latency --  --save-json new.json --save-md new.md --baseline bench-results/baseline.json
+```
+
