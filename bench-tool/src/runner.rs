@@ -59,6 +59,7 @@ impl BenchRunner {
             Histogram::<u64>::new_with_bounds(1, 1_000_000_000, 3).expect("histogram creation");
 
         let mut total_allocs = 0u64;
+        let mut total_deallocs = 0u64;
         let mut total_bytes = 0u64;
 
         for _ in 0..self.warmup_iters {
@@ -79,7 +80,8 @@ impl BenchRunner {
 
             hist.record(elapsed_ns.max(1)).expect("histogram record");
 
-            total_allocs += stats.allocations as u64;
+            total_allocs += stats.allocations as u64 + stats.reallocations as u64;
+            total_deallocs += stats.deallocations as u64;
             total_bytes += stats.bytes_allocated as u64;
         }
 
@@ -101,8 +103,10 @@ impl BenchRunner {
             },
             allocations: AllocStats {
                 total_allocs,
+                total_deallocs,
                 total_bytes,
                 avg_allocs_per_op: total_allocs as f64 / samples as f64,
+                avg_deallocs_per_op: total_deallocs as f64 / samples as f64,
                 avg_bytes_per_op: total_bytes as f64 / samples as f64,
             },
         });
