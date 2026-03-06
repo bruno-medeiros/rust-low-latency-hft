@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+core_affinity = "0.8"
 clap = { version = "4", features = ["derive"] }
 hdrhistogram = "7"
 serde = { version = "1", features = ["derive"] }

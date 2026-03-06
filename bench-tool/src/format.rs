@@ -24,6 +24,9 @@ impl BenchReport {
             m.hardware.os, m.hardware.arch
         ));
         out.push_str(&format!("  Rust:     {}\n", m.rustc_version));
+        if let Some(ref note) = m.cpu_pinning_note {
+            out.push_str(&format!("  CPU pinning:  {note}\n"));
+        }
         out.push_str(&format!(
             "  Samples:  {} (warmup: {})\n",
             m.settings.sample_iters, m.settings.warmup_iters
@@ -101,6 +104,9 @@ impl BenchReport {
         ));
         out.push_str(&format!("| Host | {} |\n", m.hardware.hostname));
         out.push_str(&format!("| Rust | {} |\n", m.rustc_version));
+        if let Some(ref note) = m.cpu_pinning_note {
+            out.push_str(&format!("| CPU pinning | {} |\n", note));
+        }
 
         // ── Settings ──
         out.push_str("\n## Settings\n\n");
