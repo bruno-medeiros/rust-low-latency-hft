@@ -63,8 +63,7 @@ impl BenchRunner {
 
         for _ in 0..self.warmup_iters {
             let mut state = setup();
-            op(&mut state);
-            black_box(());
+            black_box(op(&mut state));
         }
 
         for _ in 0..self.sample_iters {
@@ -73,8 +72,7 @@ impl BenchRunner {
             let region = Region::new(allocator);
 
             let start = Instant::now();
-            op(&mut state);
-            black_box(());
+            black_box(op(&mut state));
             let elapsed_ns = start.elapsed().as_nanos() as u64;
 
             let stats = region.change();
