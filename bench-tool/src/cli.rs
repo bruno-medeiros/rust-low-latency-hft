@@ -19,6 +19,10 @@ pub struct CliArgs {
     /// Save report as Markdown to file
     #[arg(long)]
     pub save_md: Option<PathBuf>,
+
+    /// Injected by `cargo bench`; accepted and ignored.
+    #[arg(long, hide = true)]
+    pub bench: bool,
 }
 
 impl CliArgs {
