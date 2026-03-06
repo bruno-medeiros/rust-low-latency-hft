@@ -68,12 +68,17 @@ impl BenchRunner {
         if let Some(core) = self.pin_core {
             let core_id = CoreId { id: core };
             if !core_affinity::set_for_current(core_id) {
-                let msg = match core_affinity::get_core_ids() {
-                    Some(cores) => format!("failed to pin to core {core} (available: 0..{})", cores.len()),
-                    None => format!("failed to pin to core {core} (core affinity not available on this platform)"),
+                let reason = match core_affinity::get_core_ids() {
+                    Some(cores) => format!(
+                        "core {core} not available (available: 0..{})",
+                        cores.len()
+                    ),
+                    None => "core affinity not supported on this platform".to_string(),
                 };
-                eprintln!("  error: {msg}");
-                std::process::exit(1);
+                eprintln!(
+                    "\n  warning: CPU pinning failed — {reason}; continuing without pinning"
+                );
+                self.pin_core = None;
             }
         }
 
