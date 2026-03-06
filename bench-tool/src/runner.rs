@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::hint::black_box;
 use std::time::Instant;
 
+use core_affinity::CoreId;
 use hdrhistogram::Histogram;
 use stats_alloc::{Region, StatsAlloc};
 
@@ -13,6 +14,7 @@ pub struct BenchRunner {
     warmup_iters: u64,
     sample_iters: u64,
     params: BTreeMap<String, String>,
+    pin_core: Option<usize>,
     results: Vec<ScenarioResult>,
 }
 
@@ -23,8 +25,16 @@ impl BenchRunner {
             warmup_iters: 10_000,
             sample_iters: 100_000,
             params: BTreeMap::new(),
+            pin_core: None,
             results: Vec::new(),
         }
+    }
+
+    /// Pin the benchmark thread to a specific CPU core for more consistent latency measurements.
+    /// Call this before running scenarios; on unsupported platforms this is a no-op.
+    pub fn pin_core(mut self, core: usize) -> Self {
+        self.pin_core = Some(core);
+        self
     }
 
     pub fn warmup_iters(mut self, n: u64) -> Self {
@@ -53,6 +63,18 @@ impl BenchRunner {
         S: Fn() -> State,
         F: FnMut(&mut State),
     {
+        if let Some(core) = self.pin_core {
+            let core_id = CoreId { id: core };
+            if !core_affinity::set_for_current(core_id) {
+                let msg = match core_affinity::get_core_ids() {
+                    Some(cores) => format!("failed to pin to core {core} (available: 0..{})", cores.len()),
+                    None => format!("failed to pin to core {core} (core affinity not available on this platform)"),
+                };
+                eprintln!("  error: {msg}");
+                std::process::exit(1);
+            }
+        }
+
         eprint!("  {name} ... ");
 
         let mut hist =
@@ -120,6 +142,7 @@ impl BenchRunner {
             self.warmup_iters,
             self.sample_iters,
             self.params,
+            self.pin_core,
             self.results,
         )
     }

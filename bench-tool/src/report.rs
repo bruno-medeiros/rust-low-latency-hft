@@ -20,6 +20,9 @@ pub struct ReportMetadata {
     pub hardware: HardwareInfo,
     pub settings: BenchSettings,
     pub rustc_version: String,
+    /// Note about CPU core pinning (e.g. "Thread pinned to core 2" or "No CPU pinning applied").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_pinning_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,8 +71,13 @@ impl BenchReport {
         warmup_iters: u64,
         sample_iters: u64,
         params: BTreeMap<String, String>,
+        pin_core: Option<usize>,
         scenarios: Vec<ScenarioResult>,
     ) -> Self {
+        let cpu_pinning_note = pin_core.map(|c| {
+            format!("Benchmark thread pinned to core {c}")
+        });
+
         Self {
             metadata: ReportMetadata {
                 title,
@@ -81,6 +89,7 @@ impl BenchReport {
                     params,
                 },
                 rustc_version: detect_rustc_version(),
+                cpu_pinning_note,
             },
             scenarios,
         }
