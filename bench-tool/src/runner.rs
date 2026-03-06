@@ -1,10 +1,10 @@
 use std::alloc::GlobalAlloc;
 use std::collections::BTreeMap;
 use std::hint::black_box;
-use std::time::Instant;
 
 use core_affinity::CoreId;
 use hdrhistogram::Histogram;
+use quanta::Clock;
 use stats_alloc::{Region, StatsAlloc};
 
 use crate::report::{AllocStats, BenchReport, LatencyStats, ScenarioResult};
@@ -16,6 +16,7 @@ pub struct BenchRunner {
     params: BTreeMap<String, String>,
     pin_core: Option<usize>,
     results: Vec<ScenarioResult>,
+    clock: Clock,
 }
 
 impl BenchRunner {
@@ -27,6 +28,7 @@ impl BenchRunner {
             params: BTreeMap::new(),
             pin_core: None,
             results: Vec::new(),
+            clock: Clock::new(),
         }
     }
 
@@ -94,9 +96,10 @@ impl BenchRunner {
 
             let region = Region::new(allocator);
 
-            let start = Instant::now();
+            let start = self.clock.raw();
             black_box(op(&mut state));
-            let elapsed_ns = start.elapsed().as_nanos() as u64;
+            let end = self.clock.raw();
+            let elapsed_ns = self.clock.delta_as_nanos(start, end);
 
             let stats = region.change();
 

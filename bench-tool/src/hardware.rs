@@ -42,6 +42,14 @@ impl HardwareInfo {
     }
 }
 
+pub fn detect_clock_source() -> String {
+    if cfg!(target_arch = "x86_64") || cfg!(target_arch = "x86") {
+        "TSC (RDTSC via quanta)".to_string()
+    } else {
+        "OS clock (platform fallback via quanta)".to_string()
+    }
+}
+
 pub fn detect_rustc_version() -> String {
     Command::new("rustc")
         .arg("--version")

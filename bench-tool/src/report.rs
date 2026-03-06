@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use chrono::Utc;
 
-use crate::hardware::{HardwareInfo, detect_rustc_version};
+use crate::hardware::{HardwareInfo, detect_clock_source, detect_rustc_version};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReport {
@@ -20,6 +20,9 @@ pub struct ReportMetadata {
     pub hardware: HardwareInfo,
     pub settings: BenchSettings,
     pub rustc_version: String,
+    /// Clock source used for latency measurements (e.g. "TSC (RDTSC via quanta)").
+    #[serde(default)]
+    pub clock_source: String,
     /// Note about CPU core pinning (e.g. "Thread pinned to core 2" or "No CPU pinning applied").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpu_pinning_note: Option<String>,
@@ -89,6 +92,7 @@ impl BenchReport {
                     params,
                 },
                 rustc_version: detect_rustc_version(),
+                clock_source: detect_clock_source(),
                 cpu_pinning_note,
             },
             scenarios,
