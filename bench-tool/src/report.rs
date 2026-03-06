@@ -53,8 +53,12 @@ pub struct LatencyStats {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AllocStats {
     pub total_allocs: u64,
+    #[serde(default)]
+    pub total_deallocs: u64,
     pub total_bytes: u64,
     pub avg_allocs_per_op: f64,
+    #[serde(default)]
+    pub avg_deallocs_per_op: f64,
     pub avg_bytes_per_op: f64,
 }
 

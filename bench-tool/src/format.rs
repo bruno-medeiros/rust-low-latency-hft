@@ -33,7 +33,7 @@ impl BenchReport {
         }
 
         out.push_str(&format!(
-            "\n  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10}\n",
+            "\n  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10} {:>10}\n",
             "Operation",
             "min",
             "p50",
@@ -45,6 +45,7 @@ impl BenchReport {
             "mean",
             "stdev",
             "allocs/op",
+            "deallocs/op",
             "bytes/op"
         ));
         out.push_str(&format!("  {}\n", "\u{2500}".repeat(140)));
@@ -53,7 +54,7 @@ impl BenchReport {
             let l = &s.latency;
             let a = &s.allocations;
             out.push_str(&format!(
-                "  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10}\n",
+                "  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10} {:>10}\n",
                 s.name,
                 fmt_duration(l.min_ns),
                 fmt_duration(l.p50_ns),
@@ -65,6 +66,7 @@ impl BenchReport {
                 fmt_duration_f64(l.mean_ns),
                 fmt_duration_f64(l.stdev_ns),
                 format!("{:.1}", a.avg_allocs_per_op),
+                format!("{:.1}", a.avg_deallocs_per_op),
                 fmt_bytes_f64(a.avg_bytes_per_op),
             ));
         }
@@ -118,13 +120,13 @@ impl BenchReport {
 
         // ── Combined table ──
         out.push_str("\n## Results\n\n");
-        out.push_str("| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | bytes/op |\n");
-        out.push_str("|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|----------|\n");
+        out.push_str("| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |\n");
+        out.push_str("|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|\n");
         for s in &self.scenarios {
             let l = &s.latency;
             let a = &s.allocations;
             out.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {:.1} | {} |\n",
+                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {:.1} | {:.1} | {} |\n",
                 s.name,
                 fmt_duration(l.min_ns),
                 fmt_duration(l.p50_ns),
@@ -136,6 +138,7 @@ impl BenchReport {
                 fmt_duration_f64(l.mean_ns),
                 fmt_duration_f64(l.stdev_ns),
                 a.avg_allocs_per_op,
+                a.avg_deallocs_per_op,
                 fmt_bytes_f64(a.avg_bytes_per_op),
             ));
         }
@@ -163,20 +166,21 @@ impl Comparison {
         ));
 
         out.push_str(&format!(
-            "  {:<28} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14}\n",
-            "Operation", "p50", "p99", "p99.9", "mean", "allocs/op", "bytes/op"
+            "  {:<28} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
+            "Operation", "p50", "p99", "p99.9", "mean", "allocs/op", "deallocs/op", "bytes/op"
         ));
         out.push_str(&format!("  {}\n", "\u{2500}".repeat(132)));
 
         for s in &self.scenarios {
             out.push_str(&format!(
-                "  {:<28} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14}\n",
+                "  {:<28} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
                 s.name,
                 fmt_delta_duration(&s.latency.p50),
                 fmt_delta_duration(&s.latency.p99),
                 fmt_delta_duration(&s.latency.p999),
                 fmt_delta_duration(&s.latency.mean),
                 fmt_delta_count(&s.allocations.avg_allocs_per_op),
+                fmt_delta_count(&s.allocations.avg_deallocs_per_op),
                 fmt_delta_bytes(&s.allocations.avg_bytes_per_op),
             ));
         }
@@ -193,18 +197,19 @@ impl Comparison {
             self.baseline_title, self.baseline_timestamp
         ));
 
-        out.push_str("| Operation | p50 | p99 | p99.9 | mean | allocs/op | bytes/op |\n");
-        out.push_str("|-----------|-----|-----|-------|------|-----------|----------|\n");
+        out.push_str("| Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |\n");
+        out.push_str("|-----------|-----|-----|-------|------|-----------|-------------|----------|\n");
 
         for s in &self.scenarios {
             out.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {} | {} |\n",
+                "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
                 s.name,
                 fmt_delta_duration(&s.latency.p50),
                 fmt_delta_duration(&s.latency.p99),
                 fmt_delta_duration(&s.latency.p999),
                 fmt_delta_duration(&s.latency.mean),
                 fmt_delta_count(&s.allocations.avg_allocs_per_op),
+                fmt_delta_count(&s.allocations.avg_deallocs_per_op),
                 fmt_delta_bytes(&s.allocations.avg_bytes_per_op),
             ));
         }

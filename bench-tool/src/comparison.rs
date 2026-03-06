@@ -33,10 +33,12 @@ pub struct LatencyComparison {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AllocComparison {
     pub avg_allocs_per_op: MetricDelta,
+    #[serde(default)]
+    pub avg_deallocs_per_op: MetricDelta,
     pub avg_bytes_per_op: MetricDelta,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MetricDelta {
     pub baseline: f64,
     pub current: f64,
@@ -93,6 +95,10 @@ impl BenchReport {
                         avg_allocs_per_op: MetricDelta::new(
                             ba.avg_allocs_per_op,
                             ca.avg_allocs_per_op,
+                        ),
+                        avg_deallocs_per_op: MetricDelta::new(
+                            ba.avg_deallocs_per_op,
+                            ca.avg_deallocs_per_op,
                         ),
                         avg_bytes_per_op: MetricDelta::new(
                             ba.avg_bytes_per_op,
