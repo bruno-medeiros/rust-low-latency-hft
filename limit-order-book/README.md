@@ -53,11 +53,11 @@ each scenario.
 
 ```bash
 # Save report as JSON (for future baseline comparison) and Markdown
-cargo bench --bench lob_latency -- --save-json baseline.json --save-md bench-results/baseline.md
+cargo bench --bench lob_latency -- --save-json bench-results/baseline.json --save-md bench-results/baseline.md
 ```
 
 ```bash
 # Full workflow: compare against baseline and save new one
-cargo bench --bench lob_latency --  --save-json new.json --save-md new.md --baseline bench-results/baseline.json
+cargo bench --bench lob_latency -- --save-json bench-results/new.json --save-md bench-results/new.md --baseline bench-results/baseline.json
 ```
 
