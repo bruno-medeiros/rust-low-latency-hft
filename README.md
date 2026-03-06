@@ -2,6 +2,10 @@
 
 A repository to showcase low-latency / HFT projects, with benchmarks to demonstrate the performance results. The benchmarks include various latency percentiles, allocations counts, test metadata (hardware and OS config).
 
+## Projects
+
+- [**Limit Order Book**](limit-order-book/) — a high-performance limit order book engine optimised for low-latency matching, with nanosecond-level benchmarks.
+
 ## Benchmarks
 
 Note: I only have access to an Apple Silicon / ARM machine. So for benchmarks, timing tuning is focused on Mac, even if it's not as precise as x86_64/Linux.
