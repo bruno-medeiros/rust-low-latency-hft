@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use bench_tool::{BenchRunner, CliArgs};
+use bench_tool::{BenchRunner, CliArgs, RunMode};
 use limit_order_book::EventKind::Fill;
 use limit_order_book::{LimitOrderBook, Side};
 
@@ -8,9 +8,10 @@ const NUM_LEVELS: u64 = 100;
 const ORDERS_PER_LEVEL: u64 = 10;
 const MID_PRICE: u64 = 10_000;
 
-// A single sell-side price level with many resting orders.
-// Used to measure cancel cost as a function of queue position.
+/// Single price level with many resting orders; measures cancel cost vs queue position.
 const CROWDED_LEVEL_ORDERS: u64 = 500;
+
+const BENCH_ITERS: u64 = 100_000;
 
 fn prefilled_book() -> LimitOrderBook {
     let mut book = LimitOrderBook::new();
@@ -48,24 +49,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "resting_orders",
             &(NUM_LEVELS * ORDERS_PER_LEVEL * 2).to_string(),
         )
-        .param("crowded_level_orders", &CROWDED_LEVEL_ORDERS.to_string());
+        .param("crowded_level_orders", &CROWDED_LEVEL_ORDERS.to_string())
+        .param("iters", &BENCH_ITERS.to_string());
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    runner.run("Add (passive)", prefilled_book, |book| {
-        book.add_limit_order(999_999, Side::Buy, 5_000, 50);
-    });
+    // Limit order that rests — no match.
+    runner.run(
+        RunMode::Latency,
+        "Add (passive)",
+        prefilled_book,
+        |book| {
+            book.add_limit_order(999_999, Side::Buy, 5_000, 50);
+        },
+        BENCH_ITERS,
+    );
 
-    runner.run("Add (single fill)", prefilled_book, |book| {
-        book.add_limit_order(999_999, Side::Buy, MID_PRICE + 1, 50);
-    });
+    // Aggressive order crossing 5 sell levels; fills 50 resting orders.
+    runner.run(
+        RunMode::Latency,
+        "Add (sweep 5 levels, 50 fills)",
+        prefilled_book,
+        |book| {
+            book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000);
+        },
+        BENCH_ITERS,
+    );
 
-    // Walks 5 sell levels (MID_PRICE+1 … +5);
-    runner.run("Add (sweep 5 levels, 50 fills)", prefilled_book, |book| {
-        book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000);
-    });
-
-    // Consumes qty 10 000 across 10 sell levels; 10 × 10 orders = 100 fills.
+    // Market order consuming 10 levels × 10 orders = 100 fills.
     {
         let mut book = prefilled_book();
         let vec = book.add_market_order(999_999, Side::Buy, 10_000);
@@ -75,77 +86,136 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     runner.run(
+        RunMode::Latency,
         "Market (sweep 10 levels, 100 fills)",
         prefilled_book,
         |book| {
             book.add_market_order(999_999, Side::Buy, 10_000);
         },
+        BENCH_ITERS,
     );
 
-    // Order 1 is the first enqueued at its price level — O(1) VecDeque pop.
-    runner.run("Cancel (head of queue)", prefilled_book, |book| {
-        book.cancel_order(1);
-    });
+    // Cancel the first order at a price level — best-case queue position.
+    runner.run(
+        RunMode::Latency,
+        "Cancel (head of queue)",
+        prefilled_book,
+        |book| {
+            book.cancel_order(1);
+        },
+        BENCH_ITERS,
+    );
 
-    // Order CROWDED_LEVEL_ORDERS is the last enqueued in a 500-order level.
-    // PriceLevel::remove is an O(n) linear scan; this shows worst-case cost.
-    runner.run("Cancel (tail of queue)", crowded_sell_level, |book| {
-        book.cancel_order(CROWDED_LEVEL_ORDERS);
-    });
+    // Cancel the last order in a deep queue — worst-case queue position.
+    runner.run(
+        RunMode::Latency,
+        "Cancel (tail of queue)",
+        crowded_sell_level,
+        |book| {
+            book.cancel_order(CROWDED_LEVEL_ORDERS);
+        },
+        BENCH_ITERS,
+    );
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
-    // Calls best_bid + best_ask — BTreeMap::last/first_key_value, O(log n) but
-    // practically O(1) with a hot cache.
-    runner.run("Spread (BBO query)", prefilled_book, |book| {
-        black_box(book.spread());
-    });
+    // Best bid + best ask — primary read path for both sides.
+    runner.run(
+        RunMode::Latency,
+        "Spread (BBO query)",
+        prefilled_book,
+        |book| {
+            black_box(book.spread());
+        },
+        BENCH_ITERS,
+    );
 
-    // Returns top 5 levels as a Vec — allocates on every call.
-    runner.run("Depth (top 5)", prefilled_book, |book| {
-        black_box(book.depth(Side::Sell, 5));
-    });
+    // Top-N levels query; returns aggregate quantity per level.
+    runner.run(
+        RunMode::Latency,
+        "Depth (top 5)",
+        prefilled_book,
+        |book| {
+            black_box(book.depth(Side::Sell, 5));
+        },
+        BENCH_ITERS,
+    );
 
-    // HashMap::get — O(1) average.
-    runner.run("Order lookup (hit)", prefilled_book, |book| {
-        black_box(book.order(1));
-    });
+    // Lookup resting order by ID.
+    runner.run(
+        RunMode::Latency,
+        "Order lookup (hit)",
+        prefilled_book,
+        |book| {
+            black_box(book.order(1));
+        },
+        BENCH_ITERS,
+    );
 
-    // ── Realistic mix ────────────────────────────────────────────────────────
-    // Cycles through a 10-op sequence that approximates a live trading workload:
-    //   40% passive limit adds
-    //   30% cancels
-    //   20% aggressive matches
-    //   10% BBO queries
-    //
-    // Each sample runs one operation from the cycle on a fresh prefilled book.
-    // The histogram therefore captures the latency *distribution* across the
-    // mix, not just a single operation type.
+    // ── Realistic mix (per-op latency) ────────────────────────────────────────
+    // 40% passive add / 30% cancel / 20% match / 10% BBO. Each sample runs one
+    // op from the cycle on a fresh book; histogram captures latency distribution.
     let mut mix_cursor = 0usize;
-    runner.run("Realistic mix (per-op)", prefilled_book, |book| {
-        let idx = mix_cursor % 10;
-        mix_cursor += 1;
-        match idx {
-            0..=3 => {
-                book.add_limit_order(999_990 + idx as u64, Side::Buy, 5_000 + idx as u64, 50);
+    runner.run(
+        RunMode::Latency,
+        "Realistic mix (per-op)",
+        prefilled_book,
+        |book| {
+            let idx = mix_cursor % 10;
+            mix_cursor += 1;
+            match idx {
+                0..=3 => {
+                    book.add_limit_order(999_990 + idx as u64, Side::Buy, 5_000 + idx as u64, 50);
+                }
+                4..=6 => {
+                    book.cancel_order(1 + (idx as u64 - 4) * 2);
+                }
+                7..=8 => {
+                    book.add_limit_order(
+                        999_990 + idx as u64,
+                        Side::Buy,
+                        MID_PRICE + 1 + (idx as u64 - 7),
+                        50,
+                    );
+                }
+                _ => {
+                    black_box(book.best_bid());
+                }
             }
-            4..=6 => {
-                // Cancel buy orders 1, 3, 5 — each at the head of their level.
-                book.cancel_order(1 + (idx as u64 - 4) * 2);
+        },
+        BENCH_ITERS,
+    );
+
+    // ── Throughput (sustained mix) ────────────────────────────────────────────
+    // Same mix as above, but runs on a single book in a tight loop. Sustainable:
+    // 4 add + 4 cancel (paired) + 2 BBO per 10 ops.
+    struct ThroughputState {
+        book: LimitOrderBook,
+        cycle: usize,
+    }
+    runner.run(
+        RunMode::Throughput,
+        "Throughput (sustained mix)",
+        || ThroughputState {
+            book: prefilled_book(),
+            cycle: 0,
+        },
+        |state| {
+            let base = 100_000 + state.cycle * 10;
+            for i in 0..4 {
+                state
+                    .book
+                    .add_limit_order((base + i) as u64, Side::Buy, 5_000 + i as u64, 50);
             }
-            7..=8 => {
-                book.add_limit_order(
-                    999_990 + idx as u64,
-                    Side::Buy,
-                    MID_PRICE + 1 + (idx as u64 - 7),
-                    50,
-                );
+            for i in 0..4 {
+                state.book.cancel_order((base + i) as u64);
             }
-            _ => {
-                black_box(book.best_bid());
-            }
-        }
-    });
+            black_box(state.book.spread());
+            black_box(state.book.spread());
+            state.cycle += 1;
+        },
+        BENCH_ITERS,
+    );
 
     let report = runner.finish();
     args.execute(&report)

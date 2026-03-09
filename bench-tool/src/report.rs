@@ -36,11 +36,42 @@ pub struct BenchSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScenarioResult {
+pub struct LatencyScenario {
     pub name: String,
     pub samples: u64,
     pub latency: LatencyStats,
     pub allocations: AllocStats,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThroughputScenario {
+    pub name: String,
+    pub samples: u64,
+    pub throughput_ops_per_sec: f64,
+    pub allocations: AllocStats,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ScenarioResult {
+    Latency(LatencyScenario),
+    Throughput(ThroughputScenario),
+}
+
+impl ScenarioResult {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Latency(s) => &s.name,
+            Self::Throughput(s) => &s.name,
+        }
+    }
+
+    pub fn allocations(&self) -> &AllocStats {
+        match self {
+            Self::Latency(s) => &s.allocations,
+            Self::Throughput(s) => &s.allocations,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
