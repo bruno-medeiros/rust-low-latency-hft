@@ -1,12 +1,8 @@
-use std::alloc::System;
 use std::hint::black_box;
 
-use bench_tool::{BenchRunner, CliArgs, StatsAlloc, INSTRUMENTED_SYSTEM};
-use limit_order_book::{LimitOrderBook, Side};
+use bench_tool::{BenchRunner, CliArgs};
 use limit_order_book::EventKind::Fill;
-
-#[global_allocator]
-static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+use limit_order_book::{LimitOrderBook, Side};
 
 const NUM_LEVELS: u64 = 100;
 const ORDERS_PER_LEVEL: u64 = 10;
@@ -56,16 +52,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
-    runner.run("Add (passive)", GLOBAL, prefilled_book, |book| {
+    runner.run("Add (passive)", prefilled_book, |book| {
         book.add_limit_order(999_999, Side::Buy, 5_000, 50);
     });
 
-    runner.run("Add (single fill)", GLOBAL, prefilled_book, |book| {
+    runner.run("Add (single fill)", prefilled_book, |book| {
         book.add_limit_order(999_999, Side::Buy, MID_PRICE + 1, 50);
     });
 
     // Walks 5 sell levels (MID_PRICE+1 … +5);
-    runner.run("Add (sweep 5 levels, 50 fills)", GLOBAL, prefilled_book, |book| {
+    runner.run("Add (sweep 5 levels, 50 fills)", prefilled_book, |book| {
         book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000);
     });
 
@@ -73,11 +69,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut book = prefilled_book();
         let vec = book.add_market_order(999_999, Side::Buy, 10_000);
-        assert_eq!(vec.iter().filter(|e| matches!(e.kind, Fill {..})).count(), 100);
+        assert_eq!(
+            vec.iter().filter(|e| matches!(e.kind, Fill { .. })).count(),
+            100
+        );
     }
     runner.run(
         "Market (sweep 10 levels, 100 fills)",
-        GLOBAL,
         prefilled_book,
         |book| {
             book.add_market_order(999_999, Side::Buy, 10_000);
@@ -85,38 +83,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Order 1 is the first enqueued at its price level — O(1) VecDeque pop.
-    runner.run("Cancel (head of queue)", GLOBAL, prefilled_book, |book| {
+    runner.run("Cancel (head of queue)", prefilled_book, |book| {
         book.cancel_order(1);
     });
 
     // Order CROWDED_LEVEL_ORDERS is the last enqueued in a 500-order level.
     // PriceLevel::remove is an O(n) linear scan; this shows worst-case cost.
-    runner.run(
-        "Cancel (tail of queue)",
-        GLOBAL,
-        crowded_sell_level,
-        |book| {
-            book.cancel_order(CROWDED_LEVEL_ORDERS);
-        },
-    );   
+    runner.run("Cancel (tail of queue)", crowded_sell_level, |book| {
+        book.cancel_order(CROWDED_LEVEL_ORDERS);
+    });
 
     // ── Queries ───────────────────────────────────────────────────────────────
 
     // Calls best_bid + best_ask — BTreeMap::last/first_key_value, O(log n) but
     // practically O(1) with a hot cache.
-    runner.run("Spread (BBO query)", GLOBAL, prefilled_book, |book| {
+    runner.run("Spread (BBO query)", prefilled_book, |book| {
         black_box(book.spread());
     });
 
     // Returns top 5 levels as a Vec — allocates on every call.
-    runner.run("Depth (top 5)", GLOBAL, prefilled_book, |book| {
+    runner.run("Depth (top 5)", prefilled_book, |book| {
         black_box(book.depth(Side::Sell, 5));
     });
 
     // HashMap::get — O(1) average.
-    runner.run("Order lookup (hit)", GLOBAL, prefilled_book, |book| {
+    runner.run("Order lookup (hit)", prefilled_book, |book| {
         black_box(book.order(1));
-    });  
+    });
 
     // ── Realistic mix ────────────────────────────────────────────────────────
     // Cycles through a 10-op sequence that approximates a live trading workload:
@@ -129,7 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The histogram therefore captures the latency *distribution* across the
     // mix, not just a single operation type.
     let mut mix_cursor = 0usize;
-    runner.run("Realistic mix (per-op)", GLOBAL, prefilled_book, |book| {
+    runner.run("Realistic mix (per-op)", prefilled_book, |book| {
         let idx = mix_cursor % 10;
         mix_cursor += 1;
         match idx {
