@@ -1,0 +1,9 @@
+---
+description: Rust guidelines
+globs: **/*.rs,**/Cargo.toml
+alwaysApply: true
+---
+
+# Rust: Checking for Compilation and Lint Errors
+
+ - Use `cargo clippy --all-targets --locked -- --deny warnings`, or the `-p` variant to check a specific package only
