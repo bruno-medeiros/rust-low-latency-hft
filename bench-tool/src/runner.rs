@@ -1,13 +1,16 @@
-use std::alloc::GlobalAlloc;
+use std::alloc::System;
 use std::collections::BTreeMap;
 use std::hint::black_box;
 
 use core_affinity::CoreId;
 use hdrhistogram::Histogram;
 use quanta::Clock;
-use stats_alloc::{Region, StatsAlloc};
+use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
 use crate::report::{AllocStats, BenchReport, LatencyStats, ScenarioResult};
+
+#[global_allocator]
+static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
 
 pub struct BenchRunner {
     title: String,
@@ -54,30 +57,22 @@ impl BenchRunner {
         self
     }
 
-    pub fn run<State, S, F, A>(
-        &mut self,
-        name: &str,
-        allocator: &StatsAlloc<A>,
-        setup: S,
-        mut op: F,
-    ) where
-        A: GlobalAlloc,
+    pub fn run<State, S, F>(&mut self, name: &str, setup: S, mut op: F)
+    where
         S: Fn() -> State,
         F: FnMut(&mut State),
     {
+        let allocator = GLOBAL;
         if let Some(core) = self.pin_core {
             let core_id = CoreId { id: core };
             if !core_affinity::set_for_current(core_id) {
                 let reason = match core_affinity::get_core_ids() {
-                    Some(cores) => format!(
-                        "core {core} not available (available: 0..{})",
-                        cores.len()
-                    ),
+                    Some(cores) => {
+                        format!("core {core} not available (available: 0..{})", cores.len())
+                    }
                     None => "core affinity not supported on this platform".to_string(),
                 };
-                eprintln!(
-                    "\n  warning: CPU pinning failed — {reason}; continuing without pinning"
-                );
+                eprintln!("\n  warning: CPU pinning failed — {reason}; continuing without pinning");
                 self.pin_core = None;
             }
         }
