@@ -24,7 +24,11 @@ fn prefilled_book(num_levels: u64, orders_per_level: u64) -> LimitOrderBook {
 // Depth variants show how BTreeMap traversal time scales with the number of levels.
 fn bench_add_sweep_5(c: &mut Criterion) {
     let mut group = c.benchmark_group("add_limit_order/sweep_5_levels");
-    for (depth, label) in [(10, "10/50fills"), (100, "100/50fills"), (1000, "1000/50fills")] {
+    for (depth, label) in [
+        (10, "10/50fills"),
+        (100, "100/50fills"),
+        (1000, "1000/50fills"),
+    ] {
         group.bench_with_input(BenchmarkId::from_parameter(label), &depth, |b, &d| {
             b.iter_batched(
                 || prefilled_book(d, ORDERS_PER_LEVEL),
@@ -38,13 +42,11 @@ fn bench_add_sweep_5(c: &mut Criterion) {
     group.finish();
 }
 
-// PriceLevel::remove is an O(n) linear scan through the VecDeque.
-// Canceling at the head is cheapest (found immediately); at the tail it scans
-// the entire queue. This group makes that scaling visible across queue sizes.
+// Check scaling issues with PriceLevel::remove
 fn bench_cancel_queue_position(c: &mut Criterion) {
-    let mut group = c.benchmark_group("cancel/queue_position");
+    let mut group = c.benchmark_group("cancel_order/");
 
-    for (queue_len, label) in [(100u64, "100"), (500u64, "500"), (1_000u64, "1K")] {
+    for (queue_len, label) in [(100u64, "100"), (500u64, "500"), (1_000u64, "1000")] {
         let setup = move || {
             let mut book = LimitOrderBook::new();
             for id in 1..=queue_len {
