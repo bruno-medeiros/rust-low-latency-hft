@@ -174,14 +174,14 @@ impl Comparison {
         ));
 
         out.push_str(&format!(
-            "  {:<28} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
+            "  {:<30} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
             "Operation", "p50", "p99", "p99.9", "mean", "allocs/op", "deallocs/op", "bytes/op"
         ));
         out.push_str(&format!("  {}\n", "\u{2500}".repeat(132)));
 
         for s in &self.scenarios {
             out.push_str(&format!(
-                "  {:<28} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
+                "  {:<30} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
                 s.name,
                 fmt_delta_duration(&s.latency.p50),
                 fmt_delta_duration(&s.latency.p99),
@@ -205,8 +205,12 @@ impl Comparison {
             self.baseline_title, self.baseline_timestamp
         ));
 
-        out.push_str("| Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |\n");
-        out.push_str("|-----------|-----|-----|-------|------|-----------|-------------|----------|\n");
+        out.push_str(
+            "| Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |\n",
+        );
+        out.push_str(
+            "|-----------|-----|-----|-------|------|-----------|-------------|----------|\n",
+        );
 
         for s in &self.scenarios {
             out.push_str(&format!(
