@@ -88,6 +88,7 @@ impl BenchRunner {
 
         for _ in 0..self.warmup_iters {
             let mut state = setup();
+            #[allow(clippy::unit_arg)] // black_box(()) forces op() to be evaluated for benchmarking
             black_box(op(&mut state));
         }
 
@@ -97,6 +98,7 @@ impl BenchRunner {
             let region = Region::new(allocator);
 
             let start = self.clock.raw();
+            #[allow(clippy::unit_arg)] // black_box(()) forces op() to be evaluated for benchmarking
             black_box(op(&mut state));
             let end = self.clock.raw();
             let elapsed_ns = self.clock.delta_as_nanos(start, end);
