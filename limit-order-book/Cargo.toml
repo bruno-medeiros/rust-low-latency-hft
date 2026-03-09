@@ -11,9 +11,9 @@ bench-tool = { path = "../bench-tool" }
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bench]]
-name = "lob_bench"
+name = "lob_criterion"
 harness = false
 
 [[bench]]
-name = "lob_latency"
+name = "lob"
 harness = false
