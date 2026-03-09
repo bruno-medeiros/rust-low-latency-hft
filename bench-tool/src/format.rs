@@ -1,9 +1,9 @@
 use crate::comparison::Comparison;
 use crate::format_unit::{
-    fmt_bytes_f64, fmt_delta_bytes, fmt_delta_count, fmt_delta_duration, fmt_duration,
-    fmt_duration_f64,
+    fmt_bytes_f64, fmt_delta_bytes, fmt_delta_count, fmt_delta_duration, fmt_delta_ops_sec,
+    fmt_duration, fmt_duration_f64,
 };
-use crate::report::BenchReport;
+use crate::report::{BenchReport, ScenarioResult};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  Text output
@@ -36,6 +36,15 @@ impl BenchReport {
             out.push_str(&format!("  {k}: {v}\n"));
         }
 
+        // ── Latency table ──
+        let latency_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter_map(|s| match s {
+                ScenarioResult::Latency(r) => Some(r),
+                _ => None,
+            })
+            .collect();
         out.push_str(&format!(
             "\n  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10} {:>10}\n",
             "Operation",
@@ -54,25 +63,51 @@ impl BenchReport {
         ));
         out.push_str(&format!("  {}\n", "\u{2500}".repeat(140)));
 
-        for s in &self.scenarios {
-            let l = &s.latency;
-            let a = &s.allocations;
+        for l in &latency_scenarios {
             out.push_str(&format!(
                 "  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10} {:>10}\n",
-                s.name,
-                fmt_duration(l.min_ns),
-                fmt_duration(l.p50_ns),
-                fmt_duration(l.p90_ns),
-                fmt_duration(l.p95_ns),
-                fmt_duration(l.p99_ns),
-                fmt_duration(l.p999_ns),
-                fmt_duration(l.max_ns),
-                fmt_duration_f64(l.mean_ns),
-                fmt_duration_f64(l.stdev_ns),
-                format!("{:.1}", a.avg_allocs_per_op),
-                format!("{:.1}", a.avg_deallocs_per_op),
-                fmt_bytes_f64(a.avg_bytes_per_op),
+                l.name,
+                fmt_duration(l.latency.min_ns),
+                fmt_duration(l.latency.p50_ns),
+                fmt_duration(l.latency.p90_ns),
+                fmt_duration(l.latency.p95_ns),
+                fmt_duration(l.latency.p99_ns),
+                fmt_duration(l.latency.p999_ns),
+                fmt_duration(l.latency.max_ns),
+                fmt_duration_f64(l.latency.mean_ns),
+                fmt_duration_f64(l.latency.stdev_ns),
+                format!("{:.1}", l.allocations.avg_allocs_per_op),
+                format!("{:.1}", l.allocations.avg_deallocs_per_op),
+                fmt_bytes_f64(l.allocations.avg_bytes_per_op),
             ));
+        }
+
+        // ── Throughput table ──
+        let throughput_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter_map(|s| match s {
+                ScenarioResult::Throughput(t) => Some(t),
+                _ => None,
+            })
+            .collect();
+        if !throughput_scenarios.is_empty() {
+            out.push_str(&format!(
+                "\n  Throughput\n  {:<28} {:>12} {:>10} {:>10} {:>10}\n",
+                "Operation", "ops/sec", "allocs/op", "deallocs/op", "bytes/op"
+            ));
+            out.push_str(&format!("  {}\n", "\u{2500}".repeat(80)));
+
+            for t in &throughput_scenarios {
+                out.push_str(&format!(
+                    "  {:<28} {:>12} {:>10} {:>10} {:>10}\n",
+                    t.name,
+                                    format!("{:.0}", t.throughput_ops_per_sec),
+                                    format!("{:.1}", t.allocations.avg_allocs_per_op),
+                                    format!("{:.1}", t.allocations.avg_deallocs_per_op),
+                                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
+                                ));
+            }
         }
 
         out.push('\n');
@@ -126,29 +161,60 @@ impl BenchReport {
             out.push_str(&format!("| {k} | {v} |\n"));
         }
 
-        // ── Combined table ──
+        // ── Latency table ──
+        let latency_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter(|s| matches!(s, ScenarioResult::Latency(_)))
+            .collect();
         out.push_str("\n## Results\n\n");
         out.push_str("| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |\n");
         out.push_str("|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|\n");
-        for s in &self.scenarios {
-            let l = &s.latency;
-            let a = &s.allocations;
+        for s in &latency_scenarios {
+            let ScenarioResult::Latency(l) = s else {
+                unreachable!()
+            };
             out.push_str(&format!(
                 "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {:.1} | {:.1} | {} |\n",
-                s.name,
-                fmt_duration(l.min_ns),
-                fmt_duration(l.p50_ns),
-                fmt_duration(l.p90_ns),
-                fmt_duration(l.p95_ns),
-                fmt_duration(l.p99_ns),
-                fmt_duration(l.p999_ns),
-                fmt_duration(l.max_ns),
-                fmt_duration_f64(l.mean_ns),
-                fmt_duration_f64(l.stdev_ns),
-                a.avg_allocs_per_op,
-                a.avg_deallocs_per_op,
-                fmt_bytes_f64(a.avg_bytes_per_op),
+                l.name,
+                fmt_duration(l.latency.min_ns),
+                fmt_duration(l.latency.p50_ns),
+                fmt_duration(l.latency.p90_ns),
+                fmt_duration(l.latency.p95_ns),
+                fmt_duration(l.latency.p99_ns),
+                fmt_duration(l.latency.p999_ns),
+                fmt_duration(l.latency.max_ns),
+                fmt_duration_f64(l.latency.mean_ns),
+                fmt_duration_f64(l.latency.stdev_ns),
+                l.allocations.avg_allocs_per_op,
+                l.allocations.avg_deallocs_per_op,
+                fmt_bytes_f64(l.allocations.avg_bytes_per_op),
             ));
+        }
+
+        // ── Throughput table ──
+        let throughput_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter(|s| matches!(s, ScenarioResult::Throughput(_)))
+            .collect();
+        if !throughput_scenarios.is_empty() {
+            out.push_str("\n### Throughput\n\n");
+            out.push_str("| Operation | ops/sec | allocs/op | deallocs/op | bytes/op |\n");
+            out.push_str("|-----------|---------|-----------|-------------|----------|\n");
+            for s in &throughput_scenarios {
+                let ScenarioResult::Throughput(t) = s else {
+                    unreachable!()
+                };
+                out.push_str(&format!(
+                    "| {} | {:.0} | {:.1} | {:.1} | {} |\n",
+                    t.name,
+                    t.throughput_ops_per_sec,
+                    t.allocations.avg_allocs_per_op,
+                    t.allocations.avg_deallocs_per_op,
+                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
+                ));
+            }
         }
 
         out.push('\n');
@@ -173,24 +239,73 @@ impl Comparison {
             self.baseline_title, self.baseline_timestamp
         ));
 
+        use crate::comparison::ScenarioComparison as ScCmp;
+
+        // ── Latency comparison ──
+        let latency_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter(|s| matches!(s, ScCmp::Latency { .. }))
+            .collect();
         out.push_str(&format!(
             "  {:<30} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
             "Operation", "p50", "p99", "p99.9", "mean", "allocs/op", "deallocs/op", "bytes/op"
         ));
         out.push_str(&format!("  {}\n", "\u{2500}".repeat(132)));
 
-        for s in &self.scenarios {
+        for s in &latency_scenarios {
+            let ScCmp::Latency {
+                name,
+                latency,
+                allocations,
+            } = s
+            else {
+                unreachable!()
+            };
             out.push_str(&format!(
                 "  {:<30} {:>18} {:>18} {:>18} {:>18} {:>14} {:>14} {:>14}\n",
-                s.name,
-                fmt_delta_duration(&s.latency.p50),
-                fmt_delta_duration(&s.latency.p99),
-                fmt_delta_duration(&s.latency.p999),
-                fmt_delta_duration(&s.latency.mean),
-                fmt_delta_count(&s.allocations.avg_allocs_per_op),
-                fmt_delta_count(&s.allocations.avg_deallocs_per_op),
-                fmt_delta_bytes(&s.allocations.avg_bytes_per_op),
+                name,
+                fmt_delta_duration(&latency.p50),
+                fmt_delta_duration(&latency.p99),
+                fmt_delta_duration(&latency.p999),
+                fmt_delta_duration(&latency.mean),
+                fmt_delta_count(&allocations.avg_allocs_per_op),
+                fmt_delta_count(&allocations.avg_deallocs_per_op),
+                fmt_delta_bytes(&allocations.avg_bytes_per_op),
             ));
+        }
+
+        // ── Throughput comparison ──
+        let throughput_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter(|s| matches!(s, ScCmp::Throughput { .. }))
+            .collect();
+        if !throughput_scenarios.is_empty() {
+            out.push_str(&format!(
+                "\n  Throughput\n  {:<30} {:>14} {:>14} {:>14} {:>14}\n",
+                "Operation", "ops/sec", "allocs/op", "deallocs/op", "bytes/op"
+            ));
+            out.push_str(&format!("  {}\n", "\u{2500}".repeat(90)));
+
+            for s in &throughput_scenarios {
+                let ScCmp::Throughput {
+                    name,
+                    throughput_ops_per_sec,
+                    allocations,
+                } = s
+                else {
+                    unreachable!()
+                };
+                out.push_str(&format!(
+                    "  {:<30} {:>14} {:>14} {:>14} {:>14}\n",
+                    name,
+                    fmt_delta_ops_sec(throughput_ops_per_sec),
+                    fmt_delta_count(&allocations.avg_allocs_per_op),
+                    fmt_delta_count(&allocations.avg_deallocs_per_op),
+                    fmt_delta_bytes(&allocations.avg_bytes_per_op),
+                ));
+            }
         }
 
         out.push('\n');
@@ -205,6 +320,13 @@ impl Comparison {
             self.baseline_title, self.baseline_timestamp
         ));
 
+        use crate::comparison::ScenarioComparison as ScCmp;
+
+        let latency_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter(|s| matches!(s, ScCmp::Latency { .. }))
+            .collect();
         out.push_str(
             "| Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |\n",
         );
@@ -212,18 +334,56 @@ impl Comparison {
             "|-----------|-----|-----|-------|------|-----------|-------------|----------|\n",
         );
 
-        for s in &self.scenarios {
+        for s in &latency_scenarios {
+            let ScCmp::Latency {
+                name,
+                latency,
+                allocations,
+            } = s
+            else {
+                unreachable!()
+            };
             out.push_str(&format!(
                 "| {} | {} | {} | {} | {} | {} | {} | {} |\n",
-                s.name,
-                fmt_delta_duration(&s.latency.p50),
-                fmt_delta_duration(&s.latency.p99),
-                fmt_delta_duration(&s.latency.p999),
-                fmt_delta_duration(&s.latency.mean),
-                fmt_delta_count(&s.allocations.avg_allocs_per_op),
-                fmt_delta_count(&s.allocations.avg_deallocs_per_op),
-                fmt_delta_bytes(&s.allocations.avg_bytes_per_op),
+                name,
+                fmt_delta_duration(&latency.p50),
+                fmt_delta_duration(&latency.p99),
+                fmt_delta_duration(&latency.p999),
+                fmt_delta_duration(&latency.mean),
+                fmt_delta_count(&allocations.avg_allocs_per_op),
+                fmt_delta_count(&allocations.avg_deallocs_per_op),
+                fmt_delta_bytes(&allocations.avg_bytes_per_op),
             ));
+        }
+
+        let throughput_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter(|s| matches!(s, ScCmp::Throughput { .. }))
+            .collect();
+        if !throughput_scenarios.is_empty() {
+            out.push_str("\n### Throughput\n\n");
+            out.push_str("| Operation | ops/sec | allocs/op | deallocs/op | bytes/op |\n");
+            out.push_str("|-----------|---------|-----------|-------------|----------|\n");
+
+            for s in &throughput_scenarios {
+                let ScCmp::Throughput {
+                    name,
+                    throughput_ops_per_sec,
+                    allocations,
+                } = s
+                else {
+                    unreachable!()
+                };
+                out.push_str(&format!(
+                    "| {} | {} | {} | {} | {} |\n",
+                    name,
+                    fmt_delta_ops_sec(throughput_ops_per_sec),
+                    fmt_delta_count(&allocations.avg_allocs_per_op),
+                    fmt_delta_count(&allocations.avg_deallocs_per_op),
+                    fmt_delta_bytes(&allocations.avg_bytes_per_op),
+                ));
+            }
         }
 
         out.push('\n');

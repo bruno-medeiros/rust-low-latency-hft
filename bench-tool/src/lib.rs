@@ -13,8 +13,9 @@ pub use comparison::{
 pub use format_unit::fmt_duration;
 pub use hardware::HardwareInfo;
 pub use report::{
-    AllocStats, BenchReport, BenchSettings, LatencyStats, ReportMetadata, ScenarioResult,
+    AllocStats, BenchReport, BenchSettings, LatencyScenario, LatencyStats, ReportMetadata,
+    ScenarioResult, ThroughputScenario,
 };
-pub use runner::BenchRunner;
+pub use runner::{BenchRunner, RunMode};
 
 pub use stats_alloc::{self, StatsAlloc, INSTRUMENTED_SYSTEM};
