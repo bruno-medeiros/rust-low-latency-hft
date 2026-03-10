@@ -1,4 +1,4 @@
-use crate::book_v0::price_level::PriceLevel;
+use crate::book_v1::price_level::PriceLevel;
 use crate::event::{Event, EventKind, RejectReason};
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::iter::Rev;
 
 #[derive(Debug)]
-pub struct LimitOrderBookV0 {
+pub struct LimitOrderBookV1 {
     pub(crate) bids: BTreeMap<Price, PriceLevel>,
     pub(crate) asks: BTreeMap<Price, PriceLevel>,
     pub(crate) orders: HashMap<OrderId, Order>,
@@ -20,7 +20,7 @@ fn emit(seq: &mut u64, kind: EventKind) -> Event {
     Event { sequence: s, kind }
 }
 
-impl LimitOrderBookV0 {
+impl LimitOrderBookV1 {
     pub fn new() -> Self {
         Self {
             bids: BTreeMap::new(),
@@ -325,7 +325,7 @@ impl LimitOrderBookV0 {
     }
 }
 
-impl Default for LimitOrderBookV0 {
+impl Default for LimitOrderBookV1 {
     fn default() -> Self {
         Self::new()
     }

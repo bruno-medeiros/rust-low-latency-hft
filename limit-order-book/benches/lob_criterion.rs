@@ -1,11 +1,12 @@
 use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
-use limit_order_book::{LimitOrderBook, Side};
+use limit_order_book::LimitOrderBookV0;
+use limit_order_book::types::Side;
 
-const ORDERS_PER_LEVEL: u64 = 10;
+pub const ORDERS_PER_LEVEL: u64 = 10;
 const MID_PRICE: u64 = 10_000;
 
-fn prefilled_book(num_levels: u64, orders_per_level: u64) -> LimitOrderBook {
-    let mut book = LimitOrderBook::new();
+fn prefilled_book(num_levels: u64, orders_per_level: u64) -> LimitOrderBookV0 {
+    let mut book = LimitOrderBookV0::new();
     let mut id = 1u64;
 
     for lvl in 0..num_levels {
@@ -48,7 +49,7 @@ fn bench_cancel_queue_position(c: &mut Criterion) {
 
     for (queue_len, label) in [(100u64, "100"), (500u64, "500"), (1_000u64, "1000")] {
         let setup = move || {
-            let mut book = LimitOrderBook::new();
+            let mut book = LimitOrderBookV0::new();
             for id in 1..=queue_len {
                 book.add_limit_order(id, Side::Sell, MID_PRICE + 1, 100);
             }

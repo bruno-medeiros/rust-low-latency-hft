@@ -1,9 +1,8 @@
 mod book_v0;
-mod event;
+mod book_v1;
+pub mod event;
 mod order;
-mod types;
+pub mod types;
 
-pub use book_v0::book::LimitOrderBook;
-pub use event::{Event, EventKind, RejectReason};
-pub use order::Order;
-pub use types::{OrderId, Price, Qty, Side};
+pub use book_v0::book::LimitOrderBookV0;
+pub use book_v1::book::LimitOrderBookV1;

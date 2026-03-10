@@ -1,8 +1,9 @@
 use std::hint::black_box;
 
 use bench_tool::{BenchRunner, CliArgs, RunMode};
-use limit_order_book::EventKind::Fill;
-use limit_order_book::{LimitOrderBook, Side};
+use limit_order_book::LimitOrderBookV0;
+use limit_order_book::event::EventKind::Fill;
+use limit_order_book::types::Side;
 
 const NUM_LEVELS: u64 = 100;
 const ORDERS_PER_LEVEL: u64 = 10;
@@ -13,8 +14,8 @@ const CROWDED_LEVEL_ORDERS: u64 = 500;
 
 const BENCH_ITERS: u64 = 100_000;
 
-fn prefilled_book() -> LimitOrderBook {
-    let mut book = LimitOrderBook::new();
+fn prefilled_book() -> LimitOrderBookV0 {
+    let mut book = LimitOrderBookV0::new();
     let mut id = 1u64;
     for lvl in 0..NUM_LEVELS {
         for _ in 0..ORDERS_PER_LEVEL {
@@ -29,8 +30,8 @@ fn prefilled_book() -> LimitOrderBook {
 
 // One sell-side price level with CROWDED_LEVEL_ORDERS resting orders.
 // Order IDs 1..=CROWDED_LEVEL_ORDERS, enqueued in arrival order.
-fn crowded_sell_level() -> LimitOrderBook {
-    let mut book = LimitOrderBook::new();
+fn crowded_sell_level() -> LimitOrderBookV0 {
+    let mut book = LimitOrderBookV0::new();
     for id in 1..=CROWDED_LEVEL_ORDERS {
         book.add_limit_order(id, Side::Sell, MID_PRICE + 1, 100);
     }
@@ -190,7 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Same mix as above, but runs on a single book in a tight loop. Sustainable:
     // 4 add + 4 cancel (paired) + 2 BBO per 10 ops.
     struct ThroughputState {
-        book: LimitOrderBook,
+        book: LimitOrderBookV0,
         cycle: usize,
     }
     runner.run(
