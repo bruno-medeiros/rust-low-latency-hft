@@ -1,17 +1,19 @@
 use std::collections::VecDeque;
 
-use crate::types::{OrderId, Qty};
+use crate::types::{OrderId, Price, Qty};
 
 #[derive(Debug)]
 pub(crate) struct PriceLevel {
     pub total_qty: Qty,
-    orders: VecDeque<OrderId>,
+    pub price: Price,
+    pub orders: VecDeque<OrderId>,
 }
 
 impl PriceLevel {
-    pub fn new() -> Self {
+    pub fn new(price: Price) -> Self {
         Self {
             total_qty: 0,
+            price,
             orders: VecDeque::new(),
         }
     }
@@ -45,11 +47,5 @@ impl PriceLevel {
 
     pub fn is_empty(&self) -> bool {
         self.orders.is_empty()
-    }
-}
-
-impl Default for PriceLevel {
-    fn default() -> Self {
-        Self::new()
     }
 }
