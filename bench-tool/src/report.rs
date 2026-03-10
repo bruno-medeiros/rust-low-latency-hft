@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use chrono::Utc;
 
+use crate::format_unit::{fmt_bytes_f64, fmt_duration_f64};
 use crate::hardware::{HardwareInfo, detect_clock_source, detect_rustc_version};
+use crate::{Renderer, fmt_duration};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReport {
@@ -108,9 +110,7 @@ impl BenchReport {
         pin_core: Option<usize>,
         scenarios: Vec<ScenarioResult>,
     ) -> Self {
-        let cpu_pinning_note = pin_core.map(|c| {
-            format!("Benchmark thread pinned to core {c}")
-        });
+        let cpu_pinning_note = pin_core.map(|c| format!("Benchmark thread pinned to core {c}"));
 
         Self {
             metadata: ReportMetadata {
@@ -145,5 +145,119 @@ impl BenchReport {
     pub fn load_json(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&json)?)
+    }
+}
+
+impl BenchReport {
+    pub fn render<R: Renderer>(&self, renderer: &R) -> String {
+        let mut out = String::new();
+        let m = &self.metadata;
+
+        let mut props: Vec<(&str, String)> = vec![
+            ("Timestamp", m.timestamp.clone()),
+            ("CPU", m.hardware.cpu_model.clone()),
+            ("Cores", m.hardware.cpu_cores.to_string()),
+            ("Memory", format!("{:.1} GB", m.hardware.memory_gb)),
+            ("OS", format!("{} ({})", m.hardware.os, m.hardware.arch)),
+            ("Host", m.hardware.hostname.clone()),
+            ("Rust", m.rustc_version.clone()),
+            ("Clock", m.clock_source.clone()),
+        ];
+        if let Some(ref note) = m.cpu_pinning_note {
+            props.push(("CPU pinning", note.clone()));
+        }
+        props.push((
+            "Samples",
+            format!(
+                "{} (warmup: {})",
+                m.settings.sample_iters, m.settings.warmup_iters
+            ),
+        ));
+        for (k, v) in &m.settings.params {
+            props.push((k.as_str(), v.clone()));
+        }
+
+        renderer.render_heading(&mut out, 1, &format!("{} - Latency Report", m.title));
+        renderer.render_properties(&mut out, &props);
+
+        let latency_headers = &[
+            "Operation",
+            "min",
+            "p50",
+            "p90",
+            "p95",
+            "p99",
+            "p99.9",
+            "max",
+            "mean",
+            "stdev",
+            "allocs/op",
+            "deallocs/op",
+            "bytes/op",
+        ];
+
+        let latency: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter_map(|s| match s {
+                ScenarioResult::Latency(l) => Some(l),
+                _ => None,
+            })
+            .collect();
+
+        renderer.render_heading(&mut out, 2, "Results");
+        renderer.render_table_start(&mut out, latency_headers);
+        for ls in &latency {
+            let cells = vec![
+                ls.name.clone(),
+                fmt_duration(ls.latency.min_ns),
+                fmt_duration(ls.latency.p50_ns),
+                fmt_duration(ls.latency.p90_ns),
+                fmt_duration(ls.latency.p95_ns),
+                fmt_duration(ls.latency.p99_ns),
+                fmt_duration(ls.latency.p999_ns),
+                fmt_duration(ls.latency.max_ns),
+                fmt_duration_f64(ls.latency.mean_ns),
+                fmt_duration_f64(ls.latency.stdev_ns),
+                format!("{:.1}", ls.allocations.avg_allocs_per_op),
+                format!("{:.1}", ls.allocations.avg_deallocs_per_op),
+                fmt_bytes_f64(ls.allocations.avg_bytes_per_op),
+            ];
+            renderer.render_table_row(&mut out, latency_headers, &cells);
+        }
+
+        let throughput: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter_map(|s| match s {
+                ScenarioResult::Throughput(t) => Some(t),
+                _ => None,
+            })
+            .collect();
+
+        if !throughput.is_empty() {
+            let throughput_headers = &[
+                "Scenario",
+                "ops/sec",
+                "allocs/op",
+                "deallocs/op",
+                "bytes/op",
+            ];
+            renderer.render_heading(&mut out, 3, "Throughput");
+            renderer.render_table_start(&mut out, throughput_headers);
+            for t in &throughput {
+                let cells = vec![
+                    t.name.clone(),
+                    format!("{:.0}", t.throughput_ops_per_sec),
+                    format!("{:.1}", t.allocations.avg_allocs_per_op),
+                    format!("{:.1}", t.allocations.avg_deallocs_per_op),
+                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
+                ];
+                renderer.render_table_row(&mut out, throughput_headers, &cells);
+            }
+        }
+
+        out.push('\n');
+        out
     }
 }
