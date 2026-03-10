@@ -6,47 +6,46 @@ use crate::format_unit::{
 use crate::report::{BenchReport, ScenarioResult};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Text output
+//  Renderer trait
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-impl BenchReport {
-    pub fn to_text(&self) -> String {
-        let mut out = String::new();
-        let m = &self.metadata;
+pub trait Renderer {
+    fn render_header(&self, out: &mut String, title: &str, props: &[(&str, String)]);
+    fn render_table_start(&self, out: &mut String, title: Option<&str>, headers: &[&str]);
+    fn render_table_row(&self, out: &mut String, headers: &[&str], cells: &[String]);
 
-        out.push_str(&format!("\n  {} \u{2014} Latency Report\n", m.title));
-        out.push_str(&format!("  {}\n\n", m.timestamp));
-        out.push_str(&format!("  CPU:      {}\n", m.hardware.cpu_model));
-        out.push_str(&format!("  Cores:    {}\n", m.hardware.cpu_cores));
-        out.push_str(&format!("  Memory:   {:.1} GB\n", m.hardware.memory_gb));
-        out.push_str(&format!(
-            "  OS:       {} ({})\n",
-            m.hardware.os, m.hardware.arch
-        ));
-        out.push_str(&format!("  Rust:     {}\n", m.rustc_version));
-        out.push_str(&format!("  Clock:    {}\n", m.clock_source));
+    fn render(&self, report: &BenchReport) -> String {
+        let mut out = String::new();
+        let m = &report.metadata;
+
+        let mut props: Vec<(&str, String)> = vec![
+            ("Timestamp", m.timestamp.clone()),
+            ("CPU", m.hardware.cpu_model.clone()),
+            ("Cores", m.hardware.cpu_cores.to_string()),
+            ("Memory", format!("{:.1} GB", m.hardware.memory_gb)),
+            ("OS", format!("{} ({})", m.hardware.os, m.hardware.arch)),
+            ("Host", m.hardware.hostname.clone()),
+            ("Rust", m.rustc_version.clone()),
+            ("Clock", m.clock_source.clone()),
+        ];
         if let Some(ref note) = m.cpu_pinning_note {
-            out.push_str(&format!("  CPU pinning:  {note}\n"));
+            props.push(("CPU pinning", note.clone()));
         }
-        out.push_str(&format!(
-            "  Samples:  {} (warmup: {})\n",
-            m.settings.sample_iters, m.settings.warmup_iters
+        props.push((
+            "Samples",
+            format!(
+                "{} (warmup: {})",
+                m.settings.sample_iters, m.settings.warmup_iters
+            ),
         ));
         for (k, v) in &m.settings.params {
-            out.push_str(&format!("  {k}: {v}\n"));
+            props.push((k.as_str(), v.clone()));
         }
 
+        self.render_header(&mut out, &m.title, &props);
+
         // ── Latency table ──
-        let latency_scenarios: Vec<_> = self
-            .scenarios
-            .iter()
-            .filter_map(|s| match s {
-                ScenarioResult::Latency(r) => Some(r),
-                _ => None,
-            })
-            .collect();
-        out.push_str(&format!(
-            "\n  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10} {:>10}\n",
+        let latency_headers = &[
             "Operation",
             "min",
             "p50",
@@ -59,31 +58,40 @@ impl BenchReport {
             "stdev",
             "allocs/op",
             "deallocs/op",
-            "bytes/op"
-        ));
-        out.push_str(&format!("  {}\n", "\u{2500}".repeat(140)));
+            "bytes/op",
+        ];
 
-        for l in &latency_scenarios {
-            out.push_str(&format!(
-                "  {:<28} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10} {:>10}\n",
-                l.name,
-                fmt_duration(l.latency.min_ns),
-                fmt_duration(l.latency.p50_ns),
-                fmt_duration(l.latency.p90_ns),
-                fmt_duration(l.latency.p95_ns),
-                fmt_duration(l.latency.p99_ns),
-                fmt_duration(l.latency.p999_ns),
-                fmt_duration(l.latency.max_ns),
-                fmt_duration_f64(l.latency.mean_ns),
-                fmt_duration_f64(l.latency.stdev_ns),
-                format!("{:.1}", l.allocations.avg_allocs_per_op),
-                format!("{:.1}", l.allocations.avg_deallocs_per_op),
-                fmt_bytes_f64(l.allocations.avg_bytes_per_op),
-            ));
+        let latency: Vec<_> = report
+            .scenarios
+            .iter()
+            .filter_map(|s| match s {
+                ScenarioResult::Latency(l) => Some(l),
+                _ => None,
+            })
+            .collect();
+
+        self.render_table_start(&mut out, None, latency_headers);
+        for ls in &latency {
+            let cells = vec![
+                ls.name.clone(),
+                fmt_duration(ls.latency.min_ns),
+                fmt_duration(ls.latency.p50_ns),
+                fmt_duration(ls.latency.p90_ns),
+                fmt_duration(ls.latency.p95_ns),
+                fmt_duration(ls.latency.p99_ns),
+                fmt_duration(ls.latency.p999_ns),
+                fmt_duration(ls.latency.max_ns),
+                fmt_duration_f64(ls.latency.mean_ns),
+                fmt_duration_f64(ls.latency.stdev_ns),
+                format!("{:.1}", ls.allocations.avg_allocs_per_op),
+                format!("{:.1}", ls.allocations.avg_deallocs_per_op),
+                fmt_bytes_f64(ls.allocations.avg_bytes_per_op),
+            ];
+            self.render_table_row(&mut out, latency_headers, &cells);
         }
 
         // ── Throughput table ──
-        let throughput_scenarios: Vec<_> = self
+        let throughput: Vec<_> = report
             .scenarios
             .iter()
             .filter_map(|s| match s {
@@ -91,22 +99,25 @@ impl BenchReport {
                 _ => None,
             })
             .collect();
-        if !throughput_scenarios.is_empty() {
-            out.push_str(&format!(
-                "\n  Throughput\n  {:<28} {:>12} {:>10} {:>10} {:>10}\n",
-                "Operation", "ops/sec", "allocs/op", "deallocs/op", "bytes/op"
-            ));
-            out.push_str(&format!("  {}\n", "\u{2500}".repeat(80)));
 
-            for t in &throughput_scenarios {
-                out.push_str(&format!(
-                    "  {:<28} {:>12} {:>10} {:>10} {:>10}\n",
-                    t.name,
-                                    format!("{:.0}", t.throughput_ops_per_sec),
-                                    format!("{:.1}", t.allocations.avg_allocs_per_op),
-                                    format!("{:.1}", t.allocations.avg_deallocs_per_op),
-                                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
-                                ));
+        if !throughput.is_empty() {
+            let throughput_headers = &[
+                "Scenario",
+                "ops/sec",
+                "allocs/op",
+                "deallocs/op",
+                "bytes/op",
+            ];
+            self.render_table_start(&mut out, Some("Throughput"), throughput_headers);
+            for t in &throughput {
+                let cells = vec![
+                    t.name.clone(),
+                    format!("{:.0}", t.throughput_ops_per_sec),
+                    format!("{:.1}", t.allocations.avg_allocs_per_op),
+                    format!("{:.1}", t.allocations.avg_deallocs_per_op),
+                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
+                ];
+                self.render_table_row(&mut out, throughput_headers, &cells);
             }
         }
 
@@ -116,109 +127,107 @@ impl BenchReport {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  Markdown output
+//  Text
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-impl BenchReport {
-    pub fn to_markdown(&self) -> String {
-        let mut out = String::new();
-        let m = &self.metadata;
+pub struct TextRenderer;
 
-        out.push_str(&format!("# {}\n\n", m.title));
-
-        // ── Metadata ──
-        out.push_str("## Metadata\n\n");
-        out.push_str("| Property | Value |\n");
-        out.push_str("|----------|-------|\n");
-        out.push_str(&format!("| Timestamp | {} |\n", m.timestamp));
-        out.push_str(&format!("| CPU | {} |\n", m.hardware.cpu_model));
-        out.push_str(&format!("| Cores | {} |\n", m.hardware.cpu_cores));
-        out.push_str(&format!("| Memory | {:.1} GB |\n", m.hardware.memory_gb));
-        out.push_str(&format!(
-            "| OS | {} ({}) |\n",
-            m.hardware.os, m.hardware.arch
-        ));
-        out.push_str(&format!("| Host | {} |\n", m.hardware.hostname));
-        out.push_str(&format!("| Rust | {} |\n", m.rustc_version));
-        out.push_str(&format!("| Clock | {} |\n", m.clock_source));
-        if let Some(ref note) = m.cpu_pinning_note {
-            out.push_str(&format!("| CPU pinning | {} |\n", note));
+impl TextRenderer {
+    fn col_width(i: usize, header: &str) -> usize {
+        if i == 0 {
+            header.len().max(28)
+        } else {
+            header.len().max(10)
         }
+    }
+}
 
-        // ── Settings ──
-        out.push_str("\n## Settings\n\n");
-        out.push_str("| Setting | Value |\n");
-        out.push_str("|---------|-------|\n");
-        out.push_str(&format!(
-            "| Warmup iterations | {} |\n",
-            m.settings.warmup_iters
-        ));
-        out.push_str(&format!(
-            "| Sample iterations | {} |\n",
-            m.settings.sample_iters
-        ));
-        for (k, v) in &m.settings.params {
-            out.push_str(&format!("| {k} | {v} |\n"));
-        }
-
-        // ── Latency table ──
-        let latency_scenarios: Vec<_> = self
-            .scenarios
-            .iter()
-            .filter(|s| matches!(s, ScenarioResult::Latency(_)))
-            .collect();
-        out.push_str("\n## Results\n\n");
-        out.push_str("| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |\n");
-        out.push_str("|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|\n");
-        for s in &latency_scenarios {
-            let ScenarioResult::Latency(l) = s else {
-                unreachable!()
-            };
+impl Renderer for TextRenderer {
+    fn render_header(&self, out: &mut String, title: &str, props: &[(&str, String)]) {
+        out.push_str(&format!("\n  {} \u{2014} Latency Report\n\n", title));
+        let label_width = props.iter().map(|(k, _)| k.len()).max().unwrap_or(0) + 1;
+        for (key, value) in props {
             out.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {:.1} | {:.1} | {} |\n",
-                l.name,
-                fmt_duration(l.latency.min_ns),
-                fmt_duration(l.latency.p50_ns),
-                fmt_duration(l.latency.p90_ns),
-                fmt_duration(l.latency.p95_ns),
-                fmt_duration(l.latency.p99_ns),
-                fmt_duration(l.latency.p999_ns),
-                fmt_duration(l.latency.max_ns),
-                fmt_duration_f64(l.latency.mean_ns),
-                fmt_duration_f64(l.latency.stdev_ns),
-                l.allocations.avg_allocs_per_op,
-                l.allocations.avg_deallocs_per_op,
-                fmt_bytes_f64(l.allocations.avg_bytes_per_op),
+                "  {:<width$} {}\n",
+                format!("{key}:"),
+                value,
+                width = label_width
             ));
         }
+    }
 
-        // ── Throughput table ──
-        let throughput_scenarios: Vec<_> = self
-            .scenarios
-            .iter()
-            .filter(|s| matches!(s, ScenarioResult::Throughput(_)))
-            .collect();
-        if !throughput_scenarios.is_empty() {
-            out.push_str("\n### Throughput\n\n");
-            out.push_str("| Operation | ops/sec | allocs/op | deallocs/op | bytes/op |\n");
-            out.push_str("|-----------|---------|-----------|-------------|----------|\n");
-            for s in &throughput_scenarios {
-                let ScenarioResult::Throughput(t) = s else {
-                    unreachable!()
-                };
-                out.push_str(&format!(
-                    "| {} | {:.0} | {:.1} | {:.1} | {} |\n",
-                    t.name,
-                    t.throughput_ops_per_sec,
-                    t.allocations.avg_allocs_per_op,
-                    t.allocations.avg_deallocs_per_op,
-                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
-                ));
-            }
-        }
-
+    fn render_table_start(&self, out: &mut String, title: Option<&str>, headers: &[&str]) {
         out.push('\n');
-        out
+        if let Some(t) = title {
+            out.push_str(&format!("  {t}\n"));
+        }
+        out.push_str("  ");
+        for (i, h) in headers.iter().enumerate() {
+            let w = Self::col_width(i, h);
+            let indent = if i == 0 { "" } else { " " };
+            out.push_str(&format!("{indent}{:>w$}", h));
+        }
+        out.push('\n');
+
+        let total: usize = Self::col_width(0, headers[0])
+            + headers[1..]
+                .iter()
+                .enumerate()
+                .map(|(j, h)| 1 + Self::col_width(j + 1, h))
+                .sum::<usize>();
+        out.push_str(&format!("  {}\n", "\u{2500}".repeat(total)));
+    }
+
+    fn render_table_row(&self, out: &mut String, headers: &[&str], cells: &[String]) {
+        out.push_str("  ");
+        for (i, (cell, h)) in cells.iter().zip(headers.iter()).enumerate() {
+            let w = Self::col_width(i, h);
+            let indent = if i == 0 { "" } else { " " };
+            out.push_str(&format!("{indent}{:>w$}", cell));
+        }
+        out.push('\n');
+    }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  Markdown
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+pub struct MarkdownRenderer;
+
+impl Renderer for MarkdownRenderer {
+    fn render_header(&self, out: &mut String, title: &str, props: &[(&str, String)]) {
+        out.push_str(&format!("# {}\n\n", title));
+        out.push_str("| Property | Value |\n");
+        out.push_str("|----------|-------|\n");
+        for (key, value) in props {
+            out.push_str(&format!("| {} | {} |\n", key, value));
+        }
+    }
+
+    fn render_table_start(&self, out: &mut String, title: Option<&str>, headers: &[&str]) {
+        match title {
+            Some(t) => out.push_str(&format!("\n### {}\n\n", t)),
+            None => out.push_str("\n## Results\n\n"),
+        }
+        out.push('|');
+        for h in headers {
+            out.push_str(&format!(" {} |", h));
+        }
+        out.push('\n');
+        out.push('|');
+        for h in headers {
+            out.push_str(&format!("{}|", "-".repeat(h.len() + 2)));
+        }
+        out.push('\n');
+    }
+
+    fn render_table_row(&self, out: &mut String, _headers: &[&str], cells: &[String]) {
+        out.push('|');
+        for cell in cells {
+            out.push_str(&format!(" {} |", cell));
+        }
+        out.push('\n');
     }
 }
 
