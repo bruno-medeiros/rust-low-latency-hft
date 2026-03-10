@@ -29,7 +29,7 @@ pub enum ScenarioComparison {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LatencyComparison {
     pub min: MetricDelta,
-    pub p50: MetricDelta,
+    pub p50: MetricDelta, 
     pub p90: MetricDelta,
     pub p95: MetricDelta,
     pub p99: MetricDelta,
