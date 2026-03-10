@@ -2,17 +2,7 @@ use crate::book_v1::price_level::PriceLevel;
 use crate::event::{Event, EventKind, RejectReason};
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
-use std::collections::btree_map::Iter;
-use std::collections::{BTreeMap, HashMap};
-use std::iter::Rev;
-
-#[derive(Debug)]
-pub struct LimitOrderBookV1 {
-    pub(crate) bids: BTreeMap<Price, PriceLevel>,
-    pub(crate) asks: BTreeMap<Price, PriceLevel>,
-    pub(crate) orders: HashMap<OrderId, Order>,
-    pub(crate) next_seq: u64,
-}
+use std::collections::HashMap;
 
 fn emit(seq: &mut u64, kind: EventKind) -> Event {
     let s = *seq;
@@ -20,11 +10,144 @@ fn emit(seq: &mut u64, kind: EventKind) -> Event {
     Event { sequence: s, kind }
 }
 
-impl LimitOrderBookV1 {
-    pub fn new() -> Self {
+/// An efficient PriceLevels data structure that preallocates
+/// a vec for a range of prices (ticks)
+#[derive(Debug)]
+pub struct PriceLevels {
+    pub levels: Box<[Option<PriceLevel>]>,
+    /// lowest possible price
+    pub base_price: Price,
+    /// Index of best bid.
+    pub best_bid_ix: Option<usize>,
+    /// Index of best ask. Must be > best_bid_ix
+    pub best_ask_ix: Option<usize>,
+}
+
+impl PriceLevels {
+    pub fn new(price_range: (Price, Price)) -> Self {
+        let (min_price, max_price) = price_range;
+        assert!(min_price <= max_price);
+        let capacity = (max_price - min_price + 1) as usize;
         Self {
-            bids: BTreeMap::new(),
-            asks: BTreeMap::new(),
+            levels: (0..capacity)
+                .map(|_| None)
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+            base_price: min_price,
+            best_ask_ix: None,
+            best_bid_ix: None,
+        }
+    }
+
+    pub fn best_bid(&self) -> Option<&PriceLevel> {
+        self.best_bid_ix.map(|i| self.levels[i].as_ref().unwrap())
+    }
+
+    pub fn best_ask(&self) -> Option<&PriceLevel> {
+        self.best_ask_ix.map(|i| self.levels[i].as_ref().unwrap())
+    }
+
+    pub fn bids_iter(&mut self) -> impl Iterator<Item = &mut PriceLevel> {
+        let end = self.best_bid_ix.map(|i| i + 1).unwrap_or(0);
+        self.levels[0..end]
+            .iter_mut()
+            .rev()
+            .filter_map(Option::as_mut)
+    }
+
+    pub fn asks_iter(&mut self) -> impl Iterator<Item = &mut PriceLevel> {
+        let start = self.best_ask_ix.unwrap_or(self.levels.len());
+        self.levels[start..].iter_mut().filter_map(Option::as_mut)
+    }
+
+    fn best_bid_price(&self) -> Option<Price> {
+        self.best_bid_ix.map(|ix| self.base_price + ix as Price)
+    }
+
+    fn best_ask_price(&self) -> Option<Price> {
+        self.best_ask_ix.map(|ix| self.base_price + ix as Price)
+    }
+
+    pub fn add_order(&mut self, order_id: OrderId, side: Side, price: Price, qty: Qty) {
+        let ix = (price - self.base_price) as usize;
+        let level = self.levels[ix].get_or_insert_with(|| PriceLevel::new(price));
+        level.push(order_id, qty);
+
+        match side {
+            Side::Buy => {
+                if self
+                    .best_bid_price()
+                    .is_none_or(|best_bid| price > best_bid)
+                {
+                    self.best_bid_ix = Some(ix);
+                }
+            }
+            Side::Sell => {
+                if self
+                    .best_ask_price()
+                    .is_none_or(|best_ask| price < best_ask)
+                {
+                    self.best_ask_ix = Some(ix);
+                }
+            }
+        }
+    }
+
+    pub fn remove_order(&mut self, order_id: OrderId, side: Side, price: Price, qty: Qty) {
+        let ix = (price - self.base_price) as usize;
+
+        match &mut self.levels[ix] {
+            None => {}
+            Some(price_level) => {
+                price_level.remove(order_id, qty);
+                self.remove_if_empty(price, side);
+            }
+        }
+    }
+
+    pub fn remove_if_empty(&mut self, price: Price, side: Side) {
+        let ix = (price - self.base_price) as usize;
+
+        if let Some(price_level) = &mut self.levels[ix]
+            && price_level.is_empty()
+        {
+            self.levels[ix] = None;
+
+            let base_price = self.base_price;
+
+            // Update best_bid/best_ask when a price level is removed
+            match side {
+                Side::Buy => {
+                    let new_best_bid = self
+                        .bids_iter()
+                        .next()
+                        .map(|pl| (pl.price - base_price) as usize);
+                    self.best_bid_ix = new_best_bid;
+                }
+                Side::Sell => {
+                    let new_ask_bid = self
+                        .asks_iter()
+                        .next()
+                        .map(|pl| (pl.price - base_price) as usize);
+                    self.best_ask_ix = new_ask_bid;
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LimitOrderBookV1 {
+    pub(crate) levels: PriceLevels,
+    pub(crate) orders: HashMap<OrderId, Order>,
+    pub(crate) next_seq: u64,
+}
+
+//noinspection DuplicatedCode
+impl LimitOrderBookV1 {
+    pub fn new(price_range: (Price, Price)) -> Self {
+        Self {
+            levels: PriceLevels::new(price_range),
             orders: HashMap::new(),
             next_seq: 0,
         }
@@ -37,15 +160,11 @@ impl LimitOrderBookV1 {
     // -- queries -----------------------------------------------------------
 
     pub fn best_bid(&self) -> Option<(Price, Qty)> {
-        self.bids
-            .last_key_value()
-            .map(|(&p, lvl)| (p, lvl.total_qty))
+        self.levels.best_bid().map(|pl| (pl.price, pl.total_qty))
     }
 
     pub fn best_ask(&self) -> Option<(Price, Qty)> {
-        self.asks
-            .first_key_value()
-            .map(|(&p, lvl)| (p, lvl.total_qty))
+        self.levels.best_ask().map(|pl| (pl.price, pl.total_qty))
     }
 
     pub fn spread(&self) -> Option<u64> {
@@ -63,28 +182,19 @@ impl LimitOrderBookV1 {
         self.orders.len()
     }
 
-    pub fn depth(&self, side: Side, levels: usize) -> Vec<(Price, Qty)> {
+    pub fn depth(&mut self, side: Side, levels: usize) -> Vec<(Price, Qty)> {
         match side {
-            Side::Buy => self
-                .bids_iter()
+            Side::Buy => (self.levels.bids_iter())
                 .take(levels)
-                .map(|(&p, lvl)| (p, lvl.total_qty))
+                .map(|pl| (pl.price, pl.total_qty))
                 .collect(),
-            Side::Sell => self
-                .asks_iter()
+            Side::Sell => (self.levels.asks_iter())
                 .take(levels)
-                .map(|(&p, lvl)| (p, lvl.total_qty))
+                .map(|pl| (pl.price, pl.total_qty))
                 .collect(),
         }
     }
 
-    fn asks_iter(&self) -> Iter<'_, Price, PriceLevel> {
-        self.asks.iter()
-    }
-
-    fn bids_iter(&self) -> Rev<Iter<'_, Price, PriceLevel>> {
-        self.bids.iter().rev()
-    }
     // -- commands ----------------------------------------------------------
 
     pub fn add_limit_order(
@@ -133,14 +243,7 @@ impl LimitOrderBookV1 {
                 },
             );
 
-            let same_side = match side {
-                Side::Buy => &mut self.bids,
-                Side::Sell => &mut self.asks,
-            };
-            same_side
-                .entry(price)
-                .or_default()
-                .push(order_id, remaining_qty);
+            self.levels.add_order(order_id, side, price, remaining_qty);
         }
 
         events
@@ -190,32 +293,23 @@ impl LimitOrderBookV1 {
         events
     }
 
-    pub fn cancel_order(&mut self, id: OrderId) -> Vec<Event> {
-        match self.orders.remove(&id) {
+    pub fn cancel_order(&mut self, order_id: OrderId) -> Vec<Event> {
+        match self.orders.remove(&order_id) {
             None => {
                 vec![self.emit(EventKind::Rejected {
-                    order_id: id,
+                    order_id,
                     reason: RejectReason::UnknownOrder,
                 })]
             }
             Some(order) => {
                 let mut events = Vec::new();
 
-                let book_side = match order.side {
-                    Side::Buy => &mut self.bids,
-                    Side::Sell => &mut self.asks,
-                };
-
-                if let Some(level) = book_side.get_mut(&order.price) {
-                    level.remove(id, order.remaining_qty);
-
-                    if level.is_empty() {
-                        book_side.remove(&order.price);
-                    }
-                };
+                self.levels
+                    .remove_order(order_id, order.side, order.price, order.qty);
+                // self.levels.remove_order(order_id, order.side, order.price, order.remaining_qty);
 
                 events.push(self.emit(EventKind::Cancelled {
-                    order_id: id,
+                    order_id,
                     remaining_qty: order.remaining_qty,
                 }));
 
@@ -233,21 +327,21 @@ impl LimitOrderBookV1 {
         events: &mut Vec<Event>,
     ) {
         while *qty > 0 {
-            let (matched_price, price_level) = match side {
+            let price_level = match side {
                 Side::Buy => {
-                    if let Some((ask_price, price_level)) = self.asks.iter_mut().next()
-                        && *ask_price <= price
+                    if let Some(price_level) = self.levels.asks_iter().next()
+                        && price_level.price <= price
                     {
-                        (*ask_price, price_level)
+                        price_level
                     } else {
                         return;
                     }
                 }
                 Side::Sell => {
-                    if let Some((bid_price, price_level)) = self.bids.iter_mut().next_back()
-                        && price <= *bid_price
+                    if let Some(price_level) = self.levels.bids_iter().next()
+                        && price <= price_level.price
                     {
-                        (*bid_price, price_level)
+                        price_level
                     } else {
                         return;
                     }
@@ -263,16 +357,13 @@ impl LimitOrderBookV1 {
                 qty,
             );
 
-            if price_level.is_empty() {
-                match side {
-                    Side::Buy => {
-                        self.asks.remove(&matched_price);
-                    }
-                    Side::Sell => {
-                        self.bids.remove(&matched_price);
-                    }
-                }
-            }
+            let price = price_level.price;
+            // Clear level on the passive side (opposite of aggressor)
+            let passive_side = match side {
+                Side::Buy => Side::Sell,
+                Side::Sell => Side::Buy,
+            };
+            self.levels.remove_if_empty(price, passive_side);
         }
     }
 
@@ -322,11 +413,5 @@ impl LimitOrderBookV1 {
                 *qty = 0;
             }
         }
-    }
-}
-
-impl Default for LimitOrderBookV1 {
-    fn default() -> Self {
-        Self::new()
     }
 }
