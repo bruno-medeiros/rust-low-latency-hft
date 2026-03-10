@@ -1,5 +1,6 @@
 use crate::book_v1::price_level::PriceLevel;
 use crate::event::{Event, EventKind, RejectReason};
+use crate::LimitOrderBook;
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 use std::collections::HashMap;
@@ -413,5 +414,45 @@ impl LimitOrderBookV1 {
                 *qty = 0;
             }
         }
+    }
+}
+
+impl LimitOrderBook for LimitOrderBookV1 {
+    fn best_bid(&self) -> Option<(Price, Qty)> {
+        LimitOrderBookV1::best_bid(self)
+    }
+
+    fn best_ask(&self) -> Option<(Price, Qty)> {
+        LimitOrderBookV1::best_ask(self)
+    }
+
+    fn order(&self, id: OrderId) -> Option<&Order> {
+        LimitOrderBookV1::order(self, id)
+    }
+
+    fn order_count(&self) -> usize {
+        LimitOrderBookV1::order_count(self)
+    }
+
+    fn depth(&mut self, side: Side, levels: usize) -> Vec<(Price, Qty)> {
+        LimitOrderBookV1::depth(self, side, levels)
+    }
+
+    fn add_limit_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        price: Price,
+        qty: Qty,
+    ) -> Vec<Event> {
+        LimitOrderBookV1::add_limit_order(self, order_id, side, price, qty)
+    }
+
+    fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
+        LimitOrderBookV1::add_market_order(self, order_id, side, qty)
+    }
+
+    fn cancel_order(&mut self, order_id: OrderId) -> Vec<Event> {
+        LimitOrderBookV1::cancel_order(self, order_id)
     }
 }
