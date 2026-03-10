@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 use crate::comparison::Comparison;
-use crate::renderer::{MarkdownRenderer, Renderer, TextRenderer};
+use crate::renderer::{MarkdownRenderer, TextRenderer};
 use crate::report::BenchReport;
 
 #[derive(Debug, Parser)]
@@ -40,9 +40,9 @@ impl CliArgs {
             None => None,
         };
 
-        let mut text = TextRenderer.render(report);
+        let mut text = report.render(&TextRenderer);
         if let Some(cmp) = &comparison {
-            text.push_str(&cmp.to_text());
+            text.push_str(&cmp.render(&TextRenderer));
         }
         print!("{text}");
 
@@ -59,9 +59,9 @@ impl CliArgs {
         }
 
         if let Some(path) = &self.save_md {
-            let mut md = MarkdownRenderer.render(report);
+            let mut md = report.render(&MarkdownRenderer);
             if let Some(cmp) = &comparison {
-                md.push_str(&cmp.to_markdown());
+                md.push_str(&cmp.render(&MarkdownRenderer));
             }
             std::fs::write(path, md)?;
             eprintln!("Markdown saved to {}", path.display());

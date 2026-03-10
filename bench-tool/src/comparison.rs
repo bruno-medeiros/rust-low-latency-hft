@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::format_unit::{fmt_delta_bytes, fmt_delta_count, fmt_delta_duration, fmt_delta_ops_sec};
+use crate::renderer::{MarkdownRenderer, Renderer, TextRenderer};
 use crate::report::{BenchReport, ScenarioResult};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,7 +31,7 @@ pub enum ScenarioComparison {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LatencyComparison {
     pub min: MetricDelta,
-    pub p50: MetricDelta, 
+    pub p50: MetricDelta,
     pub p90: MetricDelta,
     pub p95: MetricDelta,
     pub p99: MetricDelta,
@@ -76,6 +78,109 @@ impl MetricDelta {
     }
 }
 
+impl Comparison {
+    pub fn to_json_pretty(&self) -> String {
+        serde_json::to_string_pretty(self).expect("failed to serialize comparison")
+    }
+
+    pub fn render<R: Renderer>(&self, renderer: &R) -> String {
+        let mut out = String::new();
+
+        renderer.render_heading(&mut out, 2, "Comparison vs Baseline");
+        renderer.render_properties(
+            &mut out,
+            &[(
+                "Baseline",
+                format!("\"{}\" ({})", self.baseline_title, self.baseline_timestamp),
+            )],
+        );
+
+        let latency_headers = &[
+            "Operation",
+            "p50",
+            "p99",
+            "p99.9",
+            "mean",
+            "allocs/op",
+            "deallocs/op",
+            "bytes/op",
+        ];
+        let latency_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter_map(|scenario| match scenario {
+                ScenarioComparison::Latency {
+                    name,
+                    latency,
+                    allocations,
+                } => Some((name, latency, allocations)),
+                _ => None,
+            })
+            .collect();
+
+        renderer.render_table_start(&mut out, latency_headers);
+        for (name, latency, allocations) in latency_scenarios {
+            let cells = vec![
+                name.clone(),
+                fmt_delta_duration(&latency.p50),
+                fmt_delta_duration(&latency.p99),
+                fmt_delta_duration(&latency.p999),
+                fmt_delta_duration(&latency.mean),
+                fmt_delta_count(&allocations.avg_allocs_per_op),
+                fmt_delta_count(&allocations.avg_deallocs_per_op),
+                fmt_delta_bytes(&allocations.avg_bytes_per_op),
+            ];
+            renderer.render_table_row(&mut out, latency_headers, &cells);
+        }
+
+        let throughput_headers = &[
+            "Operation",
+            "ops/sec",
+            "allocs/op",
+            "deallocs/op",
+            "bytes/op",
+        ];
+        let throughput_scenarios: Vec<_> = self
+            .scenarios
+            .iter()
+            .filter_map(|scenario| match scenario {
+                ScenarioComparison::Throughput {
+                    name,
+                    throughput_ops_per_sec,
+                    allocations,
+                } => Some((name, throughput_ops_per_sec, allocations)),
+                _ => None,
+            })
+            .collect();
+
+        if !throughput_scenarios.is_empty() {
+            renderer.render_heading(&mut out, 3, "Throughput");
+            renderer.render_table_start(&mut out, throughput_headers);
+            for (name, throughput_ops_per_sec, allocations) in throughput_scenarios {
+                let cells = vec![
+                    name.clone(),
+                    fmt_delta_ops_sec(throughput_ops_per_sec),
+                    fmt_delta_count(&allocations.avg_allocs_per_op),
+                    fmt_delta_count(&allocations.avg_deallocs_per_op),
+                    fmt_delta_bytes(&allocations.avg_bytes_per_op),
+                ];
+                renderer.render_table_row(&mut out, throughput_headers, &cells);
+            }
+        }
+
+        out.push('\n');
+        out
+    }
+
+    pub fn to_text(&self) -> String {
+        self.render(&TextRenderer)
+    }
+
+    pub fn to_markdown(&self) -> String {
+        self.render(&MarkdownRenderer)
+    }
+}
+
 impl BenchReport {
     pub fn compare(&self, baseline: &BenchReport) -> Comparison {
         let mut scenarios = Vec::new();
@@ -94,25 +199,16 @@ impl BenchReport {
             let ba = base.allocations();
 
             let alloc_cmp = AllocComparison {
-                avg_allocs_per_op: MetricDelta::new(
-                    ba.avg_allocs_per_op,
-                    ca.avg_allocs_per_op,
-                ),
+                avg_allocs_per_op: MetricDelta::new(ba.avg_allocs_per_op, ca.avg_allocs_per_op),
                 avg_deallocs_per_op: MetricDelta::new(
                     ba.avg_deallocs_per_op,
                     ca.avg_deallocs_per_op,
                 ),
-                avg_bytes_per_op: MetricDelta::new(
-                    ba.avg_bytes_per_op,
-                    ca.avg_bytes_per_op,
-                ),
+                avg_bytes_per_op: MetricDelta::new(ba.avg_bytes_per_op, ca.avg_bytes_per_op),
             };
 
             match (base, current) {
-                (
-                    ScenarioResult::Latency(l_a),
-                    ScenarioResult::Latency(l_b),
-                ) => {
+                (ScenarioResult::Latency(l_a), ScenarioResult::Latency(l_b)) => {
                     scenarios.push(ScenarioComparison::Latency {
                         name: l_a.name.clone(),
                         latency: LatencyComparison {
@@ -128,10 +224,7 @@ impl BenchReport {
                         allocations: alloc_cmp,
                     });
                 }
-                (
-                    ScenarioResult::Throughput(t_a),
-                    ScenarioResult::Throughput(t_b),
-                ) => {
+                (ScenarioResult::Throughput(t_a), ScenarioResult::Throughput(t_b)) => {
                     scenarios.push(ScenarioComparison::Throughput {
                         name: t_a.name.clone(),
                         throughput_ops_per_sec: MetricDelta::new(
