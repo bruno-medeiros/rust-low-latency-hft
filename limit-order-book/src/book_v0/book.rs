@@ -1,0 +1,332 @@
+use crate::book_v0::price_level::PriceLevel;
+use crate::event::{Event, EventKind, RejectReason};
+use crate::order::Order;
+use crate::types::{OrderId, Price, Qty, Side};
+use std::collections::btree_map::Iter;
+use std::collections::{BTreeMap, HashMap};
+use std::iter::Rev;
+
+#[derive(Debug)]
+pub struct LimitOrderBook {
+    pub(crate) bids: BTreeMap<Price, PriceLevel>,
+    pub(crate) asks: BTreeMap<Price, PriceLevel>,
+    pub(crate) orders: HashMap<OrderId, Order>,
+    pub(crate) next_seq: u64,
+}
+
+fn emit(seq: &mut u64, kind: EventKind) -> Event {
+    let s = *seq;
+    *seq += 1;
+    Event { sequence: s, kind }
+}
+
+impl LimitOrderBook {
+    pub fn new() -> Self {
+        Self {
+            bids: BTreeMap::new(),
+            asks: BTreeMap::new(),
+            orders: HashMap::new(),
+            next_seq: 0,
+        }
+    }
+
+    fn emit(&mut self, kind: EventKind) -> Event {
+        emit(&mut self.next_seq, kind)
+    }
+
+    // -- queries -----------------------------------------------------------
+
+    pub fn best_bid(&self) -> Option<(Price, Qty)> {
+        self.bids
+            .last_key_value()
+            .map(|(&p, lvl)| (p, lvl.total_qty))
+    }
+
+    pub fn best_ask(&self) -> Option<(Price, Qty)> {
+        self.asks
+            .first_key_value()
+            .map(|(&p, lvl)| (p, lvl.total_qty))
+    }
+
+    pub fn spread(&self) -> Option<u64> {
+        match (self.best_bid(), self.best_ask()) {
+            (Some((bid, _)), Some((ask, _))) => Some(ask.saturating_sub(bid)),
+            _ => None,
+        }
+    }
+
+    pub fn order(&self, id: OrderId) -> Option<&Order> {
+        self.orders.get(&id)
+    }
+
+    pub fn order_count(&self) -> usize {
+        self.orders.len()
+    }
+
+    pub fn depth(&self, side: Side, levels: usize) -> Vec<(Price, Qty)> {
+        match side {
+            Side::Buy => self
+                .bids_iter()
+                .take(levels)
+                .map(|(&p, lvl)| (p, lvl.total_qty))
+                .collect(),
+            Side::Sell => self
+                .asks_iter()
+                .take(levels)
+                .map(|(&p, lvl)| (p, lvl.total_qty))
+                .collect(),
+        }
+    }
+
+    fn asks_iter(&self) -> Iter<'_, Price, PriceLevel> {
+        self.asks.iter()
+    }
+
+    fn bids_iter(&self) -> Rev<Iter<'_, Price, PriceLevel>> {
+        self.bids.iter().rev()
+    }
+    // -- commands ----------------------------------------------------------
+
+    pub fn add_limit_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        price: Price,
+        qty: Qty,
+    ) -> Vec<Event> {
+        if let Some(value) = self.validate_order_qty(order_id, qty) {
+            return value;
+        }
+        if price == 0 {
+            return vec![self.emit(EventKind::Rejected {
+                order_id,
+                reason: RejectReason::InvalidPrice,
+            })];
+        }
+
+        if self.orders.contains_key(&order_id) {
+            return vec![self.emit(EventKind::Rejected {
+                order_id,
+                reason: RejectReason::DuplicateOrderId,
+            })];
+        }
+        let mut events = Vec::new();
+
+        events.push(self.emit(EventKind::Accepted { order_id }));
+        let order_seq = self.next_seq;
+
+        let mut remaining_qty = qty;
+        self.match_order(order_id, side, price, &mut remaining_qty, &mut events);
+
+        if remaining_qty == 0 {
+            events.push(self.emit(EventKind::Filled { order_id }));
+        } else {
+            self.orders.insert(
+                order_id,
+                Order {
+                    id: order_id,
+                    side,
+                    price,
+                    qty,
+                    remaining_qty,
+                    sequence: order_seq,
+                },
+            );
+
+            let same_side = match side {
+                Side::Buy => &mut self.bids,
+                Side::Sell => &mut self.asks,
+            };
+            same_side
+                .entry(price)
+                .or_default()
+                .push(order_id, remaining_qty);
+        }
+
+        events
+    }
+
+    fn validate_order_qty(&mut self, id: OrderId, qty: Qty) -> Option<Vec<Event>> {
+        if qty == 0 {
+            return Some(vec![self.emit(EventKind::Rejected {
+                order_id: id,
+                reason: RejectReason::InvalidQuantity,
+            })]);
+        }
+
+        None
+    }
+
+    pub fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
+        if let Some(value) = self.validate_order_qty(order_id, qty) {
+            return value;
+        }
+        if self.orders.contains_key(&order_id) {
+            return vec![self.emit(EventKind::Rejected {
+                order_id,
+                reason: RejectReason::DuplicateOrderId,
+            })];
+        }
+        let mut events = Vec::new();
+
+        events.push(self.emit(EventKind::Accepted { order_id }));
+
+        let price = match side {
+            Side::Buy => Price::MAX,
+            Side::Sell => Price::MIN,
+        };
+        let mut qty = qty;
+        self.match_order(order_id, side, price, &mut qty, &mut events);
+
+        if qty == 0 {
+            events.push(self.emit(EventKind::Filled { order_id }));
+        } else {
+            events.push(self.emit(EventKind::Cancelled {
+                order_id,
+                remaining_qty: qty,
+            }));
+        }
+
+        events
+    }
+
+    pub fn cancel_order(&mut self, id: OrderId) -> Vec<Event> {
+        match self.orders.remove(&id) {
+            None => {
+                vec![self.emit(EventKind::Rejected {
+                    order_id: id,
+                    reason: RejectReason::UnknownOrder,
+                })]
+            }
+            Some(order) => {
+                let mut events = Vec::new();
+
+                let book_side = match order.side {
+                    Side::Buy => &mut self.bids,
+                    Side::Sell => &mut self.asks,
+                };
+
+                if let Some(level) = book_side.get_mut(&order.price) {
+                    level.remove(id, order.remaining_qty);
+
+                    if level.is_empty() {
+                        book_side.remove(&order.price);
+                    }
+                };
+
+                events.push(self.emit(EventKind::Cancelled {
+                    order_id: id,
+                    remaining_qty: order.remaining_qty,
+                }));
+
+                events
+            }
+        }
+    }
+
+    fn match_order(
+        &mut self,
+        aggressor_order_id: OrderId,
+        side: Side,
+        price: Price,
+        qty: &mut Qty,
+        events: &mut Vec<Event>,
+    ) {
+        while *qty > 0 {
+            let (matched_price, price_level) = match side {
+                Side::Buy => {
+                    if let Some((ask_price, price_level)) = self.asks.iter_mut().next()
+                        && *ask_price <= price
+                    {
+                        (*ask_price, price_level)
+                    } else {
+                        return;
+                    }
+                }
+                Side::Sell => {
+                    if let Some((bid_price, price_level)) = self.bids.iter_mut().next_back()
+                        && price <= *bid_price
+                    {
+                        (*bid_price, price_level)
+                    } else {
+                        return;
+                    }
+                }
+            };
+
+            Self::fulfill_in_price_level(
+                price_level,
+                &mut self.orders,
+                events,
+                &mut self.next_seq,
+                aggressor_order_id,
+                qty,
+            );
+
+            if price_level.is_empty() {
+                match side {
+                    Side::Buy => {
+                        self.asks.remove(&matched_price);
+                    }
+                    Side::Sell => {
+                        self.bids.remove(&matched_price);
+                    }
+                }
+            }
+        }
+    }
+
+    pub(super) fn fulfill_in_price_level(
+        price_level: &mut PriceLevel,
+        orders: &mut HashMap<OrderId, Order>,
+        events: &mut Vec<Event>,
+        next_seq: &mut u64,
+        aggressor_order_id: OrderId,
+        qty: &mut Qty,
+    ) {
+        while *qty > 0
+            && let Some(passive_order_id) = price_level.front()
+        {
+            let passive_order = orders
+                .get_mut(&passive_order_id)
+                .expect("order exists in orders map");
+            let passive_remaining_qty = passive_order.remaining_qty;
+            let price = passive_order.price;
+
+            let fill_qty = passive_remaining_qty.min(*qty);
+            events.push(emit(
+                next_seq,
+                EventKind::Fill {
+                    passive_order_id,
+                    aggressor_order_id,
+                    price,
+                    qty: fill_qty,
+                },
+            ));
+
+            if *qty >= passive_remaining_qty {
+                price_level.remove(passive_order_id, passive_remaining_qty);
+
+                events.push(emit(
+                    next_seq,
+                    EventKind::Filled {
+                        order_id: passive_order_id,
+                    },
+                ));
+                orders.remove(&passive_order_id);
+
+                *qty -= passive_remaining_qty;
+            } else {
+                price_level.reduce_qty(*qty);
+                passive_order.remaining_qty -= *qty;
+                *qty = 0;
+            }
+        }
+    }
+}
+
+impl Default for LimitOrderBook {
+    fn default() -> Self {
+        Self::new()
+    }
+}
