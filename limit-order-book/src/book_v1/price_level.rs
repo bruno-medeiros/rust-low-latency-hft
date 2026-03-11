@@ -19,7 +19,6 @@ impl PriceLevel {
         }
     }
 
-    // TODO: review qty uses
     pub fn append_order(&mut self, order_id: OrderId, qty: Qty) -> Option<OrderId> {
         self.total_qty += qty;
         match self.order_tail {
