@@ -2,7 +2,7 @@ use crate::book_tests_common;
 use crate::book_v1::book::LimitOrderBookV1;
 
 fn order_book_v1() -> LimitOrderBookV1 {
-    LimitOrderBookV1::new((0, 10_000), 10_000_000)
+    LimitOrderBookV1::new((0, 10_000), 10_000)
 }
 
 #[test]
