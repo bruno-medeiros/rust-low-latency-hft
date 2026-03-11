@@ -189,6 +189,8 @@ pub fn limit_order_partial_match_passive_remains(mut book: impl LimitOrderBook) 
 pub fn market_order_full_fill(mut book: impl LimitOrderBook) {
     book.add_limit_order(1, Side::Sell, 100, 5);
     book.add_limit_order(2, Side::Sell, 101, 5);
+    assert_eq!(book.order_count(), 2);
+    assert!(book.order(1).is_some());
 
     let events = book.add_market_order(3, Side::Buy, 8);
 
