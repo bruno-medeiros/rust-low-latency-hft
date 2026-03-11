@@ -1,6 +1,8 @@
+mod book_api;
+#[cfg(test)]
+mod book_tests_common;
 mod book_v0;
 mod book_v1;
-mod book_api;
 pub mod event;
 mod order;
 pub mod types;
