@@ -60,20 +60,20 @@ impl LimitOrderBookV0 {
         self.orders.get(&id)
     }
 
-    pub fn order_count(&self) -> usize {
-        self.orders.len()
+    pub fn order_count(&self) -> u64 {
+        self.orders.len() as u64
     }
 
-    pub fn depth(&self, side: Side, levels: usize) -> Vec<(Price, Qty)> {
+    pub fn depth(&self, side: Side, levels: u64) -> Vec<(Price, Qty)> {
         match side {
             Side::Buy => self
                 .bids_iter()
-                .take(levels)
+                .take(levels as usize)
                 .map(|(&p, lvl)| (p, lvl.total_qty))
                 .collect(),
             Side::Sell => self
                 .asks_iter()
-                .take(levels)
+                .take(levels as usize)
                 .map(|(&p, lvl)| (p, lvl.total_qty))
                 .collect(),
         }
@@ -345,11 +345,11 @@ impl LimitOrderBook for LimitOrderBookV0 {
         LimitOrderBookV0::order(self, id)
     }
 
-    fn order_count(&self) -> usize {
+    fn order_count(&self) -> u64 {
         LimitOrderBookV0::order_count(self)
     }
 
-    fn depth(&mut self, side: Side, levels: usize) -> Vec<(Price, Qty)> {
+    fn depth(&mut self, side: Side, levels: u64) -> Vec<(Price, Qty)> {
         LimitOrderBookV0::depth(self, side, levels)
     }
 

@@ -12,3 +12,12 @@ pub enum Side {
     Buy = 0,
     Sell = 1,
 }
+
+impl Side {
+    pub fn opposite(self) -> Self {
+        match self {
+            Side::Buy => Side::Sell,
+            Side::Sell => Side::Buy,
+        }
+    }
+}

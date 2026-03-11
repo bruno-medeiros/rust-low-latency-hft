@@ -16,9 +16,9 @@ pub trait LimitOrderBook {
 
     fn order(&self, id: OrderId) -> Option<&Order>;
 
-    fn order_count(&self) -> usize;
+    fn order_count(&self) -> u64;
 
-    fn depth(&mut self, side: Side, levels: usize) -> Vec<(Price, Qty)>;
+    fn depth(&mut self, side: Side, levels: u64) -> Vec<(Price, Qty)>;
 
     fn add_limit_order(
         &mut self,
