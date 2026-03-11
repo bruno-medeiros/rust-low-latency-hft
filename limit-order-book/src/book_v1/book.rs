@@ -1,6 +1,6 @@
+use crate::LimitOrderBook;
 use crate::book_v1::price_level::PriceLevel;
 use crate::event::{Event, EventKind, RejectReason};
-use crate::LimitOrderBook;
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 use std::collections::HashMap;
