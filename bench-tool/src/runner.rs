@@ -7,6 +7,8 @@ use hdrhistogram::Histogram;
 use quanta::Clock;
 use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
+use chrono::Utc;
+
 use crate::report::{
     AllocStats, BenchReport, LatencyScenario, LatencyStats, ScenarioResult, ThroughputScenario,
 };
@@ -64,11 +66,16 @@ pub struct BenchRunner {
 
 impl BenchRunner {
     pub fn new(title: &str) -> Self {
+        let mut params = BTreeMap::new();
+        params.insert(
+            "bench_date".to_string(),
+            Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
+        );
         Self {
             title: title.to_string(),
             warmup_iters: 10_000,
             sample_iters: 100_000,
-            params: BTreeMap::new(),
+            params,
             pin_core: None,
             filter: None,
             results: Vec::new(),
@@ -111,10 +118,10 @@ impl BenchRunner {
         S: Fn() -> State,
         F: FnMut(&mut State),
     {
-        if let Some(f) = &self.filter {
-            if !name.to_lowercase().contains(&f.to_lowercase()) {
-                return;
-            }
+        if let Some(f) = &self.filter
+            && !name.to_lowercase().contains(&f.to_lowercase())
+        {
+            return;
         }
 
         let allocator = GLOBAL;
