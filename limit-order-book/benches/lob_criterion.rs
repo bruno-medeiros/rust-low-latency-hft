@@ -36,6 +36,7 @@ fn bench_add_sweep_5(c: &mut Criterion) {
                 || prefilled_book(d, ORDERS_PER_LEVEL),
                 |mut book| {
                     let mut sink = CountingEventSink::default();
+                    #[allow(clippy::unit_arg)]
                     black_box(book.add_limit_order(
                         999_999,
                         Side::Buy,
@@ -70,6 +71,7 @@ fn bench_cancel_queue_position(c: &mut Criterion) {
                 setup,
                 |mut book| {
                     let mut sink = CountingEventSink::default();
+                    #[allow(clippy::unit_arg)]
                     black_box(book.cancel_order(1, &mut sink));
                 },
                 BatchSize::SmallInput,
@@ -81,6 +83,7 @@ fn bench_cancel_queue_position(c: &mut Criterion) {
                 setup,
                 |mut book| {
                     let mut sink = CountingEventSink::default();
+                    #[allow(clippy::unit_arg)]
                     black_box(book.cancel_order(n, &mut sink));
                 },
                 BatchSize::SmallInput,

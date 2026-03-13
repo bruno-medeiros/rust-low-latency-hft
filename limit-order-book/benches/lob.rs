@@ -36,41 +36,24 @@ fn fill_crowded_sell(book: &mut impl LimitOrderBook) {
     }
 }
 
-fn prefilled_book_v0() -> LimitOrderBookV0 {
-    let mut book = LimitOrderBookV0::new();
-    fill_book(&mut book);
-    book
-}
+fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn() -> B) {
+    let prefilled_book = || {
+        let mut b = new_book();
+        fill_book(&mut b);
+        b
+    };
+    let crowded_sell_level = || {
+        let mut b = new_book();
+        fill_crowded_sell(&mut b);
+        b
+    };
 
-fn prefilled_book_v1() -> LimitOrderBookV1 {
-    let mut book = LimitOrderBookV1::new(V1_PRICE_RANGE, V1_ORDER_CAPACITY);
-    fill_book(&mut book);
-    book
-}
-
-fn crowded_sell_level_v0() -> LimitOrderBookV0 {
-    let mut book = LimitOrderBookV0::new();
-    fill_crowded_sell(&mut book);
-    book
-}
-
-fn crowded_sell_level_v1() -> LimitOrderBookV1 {
-    let mut book = LimitOrderBookV1::new(V1_PRICE_RANGE, V1_ORDER_CAPACITY);
-    fill_crowded_sell(&mut book);
-    book
-}
-
-fn run_benchmarks<B: LimitOrderBook>(
-    runner: &mut BenchRunner,
-    prefilled_book: impl Fn() -> B,
-    crowded_sell_level: impl Fn() -> B,
-) {
     // ── Commands ──────────────────────────────────────────────────────────────
 
     runner.run(
         RunMode::Latency,
         "Add (passive)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             let mut sink = CountingEventSink::default();
             book.add_limit_order(999_999, Side::Buy, 5_000, 50, &mut sink);
@@ -81,7 +64,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Add (sweep 5 levels, 50 fills)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             let mut sink = CountingEventSink::default();
             book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000, &mut sink);
@@ -99,7 +82,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Market (sweep 10 levels, 100 fills)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             let mut sink = CountingEventSink::default();
             book.add_market_order(999_999, Side::Buy, 10_000, &mut sink);
@@ -111,7 +94,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Cancel (head of queue)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             let mut sink = CountingEventSink::default();
             book.cancel_order(1, &mut sink);
@@ -123,7 +106,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Cancel (tail of queue)",
-        &crowded_sell_level,
+        crowded_sell_level,
         |book| {
             let mut sink = CountingEventSink::default();
             book.cancel_order(CROWDED_LEVEL_ORDERS, &mut sink);
@@ -137,7 +120,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Spread (BBO query)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             black_box(book.spread());
         },
@@ -148,7 +131,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Depth (top 5)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             black_box(book.depth(Side::Sell, 5));
         },
@@ -159,7 +142,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Order lookup (hit)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             black_box(book.order(1));
         },
@@ -172,7 +155,7 @@ fn run_benchmarks<B: LimitOrderBook>(
     runner.run(
         RunMode::Latency,
         "Realistic mix (per-op)",
-        &prefilled_book,
+        prefilled_book,
         |book| {
             let mut sink = CountingEventSink::default();
             let idx = mix_cursor % 10;
@@ -263,8 +246,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .param("lob_version", version);
 
     match version.as_str() {
-        "v0" => run_benchmarks(&mut runner, prefilled_book_v0, crowded_sell_level_v0),
-        "v1" => run_benchmarks(&mut runner, prefilled_book_v1, crowded_sell_level_v1),
+        "v0" => run_benchmarks(&mut runner, LimitOrderBookV0::new),
+        "v1" => run_benchmarks(&mut runner, || {
+            LimitOrderBookV1::new(V1_PRICE_RANGE, V1_ORDER_CAPACITY)
+        }),
         _ => return Err(format!("unknown LOB version: {version}; expected v0 or v1").into()),
     }
 
