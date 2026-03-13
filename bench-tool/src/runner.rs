@@ -57,6 +57,7 @@ pub struct BenchRunner {
     sample_iters: u64,
     params: BTreeMap<String, String>,
     pin_core: Option<usize>,
+    filter: Option<String>,
     results: Vec<ScenarioResult>,
     clock: Clock,
 }
@@ -69,6 +70,7 @@ impl BenchRunner {
             sample_iters: 100_000,
             params: BTreeMap::new(),
             pin_core: None,
+            filter: None,
             results: Vec::new(),
             clock: Clock::new(),
         }
@@ -96,6 +98,11 @@ impl BenchRunner {
         self
     }
 
+    pub fn filter(mut self, filter: Option<String>) -> Self {
+        self.filter = filter;
+        self
+    }
+
     /// Run a scenario. `iters` is the number of iterations for both latency and throughput modes.
     /// - `Latency`: setup before each op, measure per-op latency distribution.
     /// - `Throughput`: single state, run `iters` ops in a tight loop, report sustained ops/sec.
@@ -104,6 +111,12 @@ impl BenchRunner {
         S: Fn() -> State,
         F: FnMut(&mut State),
     {
+        if let Some(f) = &self.filter {
+            if !name.to_lowercase().contains(&f.to_lowercase()) {
+                return;
+            }
+        }
+
         let allocator = GLOBAL;
         if let Some(core) = self.pin_core {
             let core_id = CoreId { id: core };
