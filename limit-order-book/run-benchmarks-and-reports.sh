@@ -12,22 +12,22 @@ mkdir -p "$RESULTS_DIR"
 echo "=== Benchmark: LOB v0 (baseline) ==="
 cargo bench --bench lob -- \
     --lob-version v0 \
-    --save-json "$RESULTS_DIR/lob-v0.json" \
-    --save-md "$RESULTS_DIR/lob-v0.md"
+    --save-json "$RESULTS_DIR/v0/lob.json" \
+    --save-md "$RESULTS_DIR/v0/lob.md"
   cargo flamegraph --bench lob \
-      -o "$RESULTS_DIR/flamegraph-v0.svg" \
+      -o "$RESULTS_DIR/v0/flamegraph.svg" \
       -- --filter Throughput --lob-version "v0"
 
 echo ""
 echo "=== Benchmark: LOB v1 (vs v0 baseline) ==="
 cargo bench --bench lob -- \
     --lob-version v1 \
-    --baseline "$RESULTS_DIR/lob-v0.json" \
-    --save-json "$RESULTS_DIR/lob-v1.json" \
-    --save-md "$RESULTS_DIR/lob-v1.md"
+    --baseline "$RESULTS_DIR/v0/lob.json" \
+    --save-json "$RESULTS_DIR/v1/lob.json" \
+    --save-md "$RESULTS_DIR/v1/lob.md"
 
 cargo flamegraph --bench lob \
-    -o "$RESULTS_DIR/flamegraph-v1.svg" \
+    -o "$RESULTS_DIR/v1/flamegraph.svg" \
     -- --filter Throughput --lob-version "v1"
 
 echo ""
