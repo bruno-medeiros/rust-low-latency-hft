@@ -1,4 +1,4 @@
-use crate::event::Event;
+use crate::event::{Event, EventSink};
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 
@@ -26,9 +26,40 @@ pub trait LimitOrderBook {
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Vec<Event>;
+        events: &mut impl EventSink,
+    );
 
-    fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event>;
+    fn add_market_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        qty: Qty,
+        events: &mut impl EventSink,
+    );
 
-    fn cancel_order(&mut self, order_id: OrderId) -> Vec<Event>;
+    fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink);
+
+    fn add_limit_order_vec(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        price: Price,
+        qty: Qty,
+    ) -> Vec<Event> {
+        let mut events = Vec::new();
+        self.add_limit_order(order_id, side, price, qty, &mut events);
+        events
+    }
+
+    fn add_market_order_vec(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
+        let mut events = Vec::new();
+        self.add_market_order(order_id, side, qty, &mut events);
+        events
+    }
+
+    fn cancel_order_vec(&mut self, order_id: OrderId) -> Vec<Event> {
+        let mut events = Vec::new();
+        self.cancel_order(order_id, &mut events);
+        events
+    }
 }
