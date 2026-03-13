@@ -21,6 +21,14 @@ pub struct CliArgs {
     #[arg(long)]
     pub save_md: Option<PathBuf>,
 
+    /// Run only scenarios whose name contains this string (case-insensitive)
+    #[arg(long)]
+    pub filter: Option<String>,
+
+    /// LOB implementation version (e.g. v0, v1)
+    #[arg(long, default_value = "v1")]
+    pub lob_version: String,
+
     /// Injected by `cargo bench`; accepted and ignored.
     #[arg(long, hide = true)]
     pub bench: bool,
