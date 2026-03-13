@@ -13,8 +13,13 @@ const CROWDED_LEVEL_ORDERS: u64 = 500;
 
 const BENCH_ITERS: u64 = 100_000;
 
-const V1_PRICE_RANGE: (u64, u64) = (1, 20_000);
-const V1_ORDER_CAPACITY: u64 = 2_000_000;
+const PRICE_RANGE: (u64, u64) = (1, 20_000);
+const ORDER_CAPACITY: u64 = 10_000;
+const THROUGHPUT_ORDER_CAPACITY: u64 = 500_000;
+
+/// Order IDs used by benchmark operations (above the prefilled range 1..=2000).
+const OP_ORDER_ID: u64 = 3_000;
+const OP_ORDER_ID_BASE: u64 = 3_000;
 
 fn fill_book(book: &mut impl LimitOrderBook) {
     let mut sink = CountingEventSink::default();
@@ -36,14 +41,17 @@ fn fill_crowded_sell(book: &mut impl LimitOrderBook) {
     }
 }
 
-fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn() -> B) {
-    let prefilled_book = || {
-        let mut b = new_book();
+fn run_benchmarks<B: LimitOrderBook>(
+    runner: &mut BenchRunner,
+    new_book: impl Fn((u64, u64), u64) -> B,
+) {
+    let prefilled_book = |price_range, order_capacity| {
+        let mut b = new_book(price_range, order_capacity);
         fill_book(&mut b);
         b
     };
-    let crowded_sell_level = || {
-        let mut b = new_book();
+    let crowded_sell_level = |price_range, order_capacity| {
+        let mut b = new_book(price_range, order_capacity);
         fill_crowded_sell(&mut b);
         b
     };
@@ -53,10 +61,10 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Add (passive)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             let mut sink = CountingEventSink::default();
-            book.add_limit_order(999_999, Side::Buy, 5_000, 50, &mut sink);
+            book.add_limit_order(OP_ORDER_ID, Side::Buy, 5_000, 50, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -64,28 +72,28 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Add (sweep 5 levels, 50 fills)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             let mut sink = CountingEventSink::default();
-            book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000, &mut sink);
+            book.add_limit_order(OP_ORDER_ID, Side::Buy, MID_PRICE + 5, 5_000, &mut sink);
         },
         BENCH_ITERS,
     );
 
     // Verify the market-order scenario produces the expected number of fills.
     {
-        let mut book = prefilled_book();
+        let mut book = prefilled_book(PRICE_RANGE, ORDER_CAPACITY);
         let mut sink = CountingEventSink::default();
-        book.add_market_order(999_999, Side::Buy, 10_000, &mut sink);
+        book.add_market_order(OP_ORDER_ID, Side::Buy, 10_000, &mut sink);
         assert_eq!(sink.fill, 100);
     }
     runner.run(
         RunMode::Latency,
         "Market (sweep 10 levels, 100 fills)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             let mut sink = CountingEventSink::default();
-            book.add_market_order(999_999, Side::Buy, 10_000, &mut sink);
+            book.add_market_order(OP_ORDER_ID, Side::Buy, 10_000, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -94,7 +102,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Cancel (head of queue)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             let mut sink = CountingEventSink::default();
             book.cancel_order(1, &mut sink);
@@ -106,7 +114,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Cancel (tail of queue)",
-        crowded_sell_level,
+        || crowded_sell_level(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             let mut sink = CountingEventSink::default();
             book.cancel_order(CROWDED_LEVEL_ORDERS, &mut sink);
@@ -120,7 +128,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Spread (BBO query)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             black_box(book.spread());
         },
@@ -131,7 +139,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Depth (top 5)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             black_box(book.depth(Side::Sell, 5));
         },
@@ -142,7 +150,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Order lookup (hit)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             black_box(book.order(1));
         },
@@ -155,7 +163,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
     runner.run(
         RunMode::Latency,
         "Realistic mix (per-op)",
-        prefilled_book,
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
         |book| {
             let mut sink = CountingEventSink::default();
             let idx = mix_cursor % 10;
@@ -163,7 +171,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
             match idx {
                 0..=3 => {
                     book.add_limit_order(
-                        999_990 + idx as u64,
+                        OP_ORDER_ID_BASE + idx as u64,
                         Side::Buy,
                         5_000 + idx as u64,
                         50,
@@ -175,7 +183,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
                 }
                 7..=8 => {
                     book.add_limit_order(
-                        999_990 + idx as u64,
+                        OP_ORDER_ID_BASE + idx as u64,
                         Side::Buy,
                         MID_PRICE + 1 + (idx as u64 - 7),
                         50,
@@ -192,6 +200,8 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
 
     // ── Throughput (sustained mix) ────────────────────────────────────────────
     // 4 add + 4 cancel (paired) + 2 BBO per 10 ops.
+    // Uses a larger order_capacity to stress the V1 data structure more realistically.
+    // IDs are reused each cycle since all adds are cancelled within the same iteration.
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
         sink: CountingEventSink,
@@ -201,12 +211,12 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, new_book: impl Fn
         RunMode::Throughput,
         "Throughput (sustained mix)",
         || ThroughputState {
-            book: prefilled_book(),
+            book: prefilled_book(PRICE_RANGE, THROUGHPUT_ORDER_CAPACITY),
             sink: CountingEventSink::default(),
             cycle: 0,
         },
         |state| {
-            let base = 100_000 + state.cycle * 10;
+            let base = OP_ORDER_ID_BASE as usize + state.cycle * 10;
             for i in 0..4 {
                 state.book.add_limit_order(
                     (base + i) as u64,
@@ -246,10 +256,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .param("lob_version", version);
 
     match version.as_str() {
-        "v0" => run_benchmarks(&mut runner, LimitOrderBookV0::new),
-        "v1" => run_benchmarks(&mut runner, || {
-            LimitOrderBookV1::new(V1_PRICE_RANGE, V1_ORDER_CAPACITY)
+        "v0" => run_benchmarks(&mut runner, |_price_range, _order_capacity| {
+            LimitOrderBookV0::new()
         }),
+        "v1" => run_benchmarks(&mut runner, LimitOrderBookV1::new),
         _ => return Err(format!("unknown LOB version: {version}; expected v0 or v1").into()),
     }
 
