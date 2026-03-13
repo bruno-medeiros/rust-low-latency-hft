@@ -3,6 +3,8 @@ use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 
 pub trait LimitOrderBook {
+    fn with_config(price_range: (Price, Price), order_capacity: OrderId) -> Self;
+
     fn best_bid(&self) -> Option<(Price, Qty)>;
 
     fn best_ask(&self) -> Option<(Price, Qty)>;

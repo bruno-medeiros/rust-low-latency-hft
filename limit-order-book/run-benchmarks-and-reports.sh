@@ -10,7 +10,7 @@ mkdir -p "$RESULTS_DIR"
 # ── Benchmark reports ─────────────────────────────────────────────────────────
 
 echo "=== Benchmark: LOB v0 (baseline) ==="
-mkdir "$RESULTS_DIR/v0"
+mkdir -p "$RESULTS_DIR/v0"
 cargo bench --bench lob -- \
     --lob-version v0 \
     --save-json "$RESULTS_DIR/v0/lob.json" \
@@ -22,7 +22,7 @@ cargo flamegraph --bench lob \
 
 echo ""
 echo "=== Benchmark: LOB v1 (vs v0 baseline) ==="
-mkdir "$RESULTS_DIR/v1"
+mkdir -p "$RESULTS_DIR/v1"
 cargo bench --bench lob -- \
     --lob-version v1 \
     --baseline "$RESULTS_DIR/v0/lob.json" \
