@@ -1,7 +1,7 @@
 use std::hint::black_box;
 
 use bench_tool::{BenchRunner, CliArgs, RunMode};
-use limit_order_book::LimitOrderBookV0;
+use limit_order_book::{LimitOrderBook, LimitOrderBookV0, CountingEventSink};
 use limit_order_book::event::EventKind::Fill;
 use limit_order_book::types::Side;
 
@@ -16,12 +16,13 @@ const BENCH_ITERS: u64 = 100_000;
 
 fn prefilled_book() -> LimitOrderBookV0 {
     let mut book = LimitOrderBookV0::new();
+    let mut sink = CountingEventSink::default();
     let mut id = 1u64;
     for lvl in 0..NUM_LEVELS {
         for _ in 0..ORDERS_PER_LEVEL {
-            book.add_limit_order(id, Side::Buy, MID_PRICE - 1 - lvl, 100);
+            book.add_limit_order(id, Side::Buy, MID_PRICE - 1 - lvl, 100, &mut sink);
             id += 1;
-            book.add_limit_order(id, Side::Sell, MID_PRICE + 1 + lvl, 100);
+            book.add_limit_order(id, Side::Sell, MID_PRICE + 1 + lvl, 100, &mut sink);
             id += 1;
         }
     }
@@ -32,8 +33,9 @@ fn prefilled_book() -> LimitOrderBookV0 {
 // Order IDs 1..=CROWDED_LEVEL_ORDERS, enqueued in arrival order.
 fn crowded_sell_level() -> LimitOrderBookV0 {
     let mut book = LimitOrderBookV0::new();
+    let mut sink = CountingEventSink::default();
     for id in 1..=CROWDED_LEVEL_ORDERS {
-        book.add_limit_order(id, Side::Sell, MID_PRICE + 1, 100);
+        book.add_limit_order(id, Side::Sell, MID_PRICE + 1, 100, &mut sink);
     }
     book
 }
@@ -61,7 +63,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Add (passive)",
         prefilled_book,
         |book| {
-            book.add_limit_order(999_999, Side::Buy, 5_000, 50);
+            let mut sink = CountingEventSink::default();
+            book.add_limit_order(999_999, Side::Buy, 5_000, 50, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -72,7 +75,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Add (sweep 5 levels, 50 fills)",
         prefilled_book,
         |book| {
-            book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000);
+            let mut sink = CountingEventSink::default();
+            book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -80,9 +84,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Market order consuming 10 levels × 10 orders = 100 fills.
     {
         let mut book = prefilled_book();
-        let vec = book.add_market_order(999_999, Side::Buy, 10_000);
+        let mut events = Vec::new();
+        book.add_market_order(999_999, Side::Buy, 10_000, &mut events);
         assert_eq!(
-            vec.iter().filter(|e| matches!(e.kind, Fill { .. })).count(),
+            events.iter().filter(|e| matches!(e.kind, Fill { .. })).count(),
             100
         );
     }
@@ -91,7 +96,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Market (sweep 10 levels, 100 fills)",
         prefilled_book,
         |book| {
-            book.add_market_order(999_999, Side::Buy, 10_000);
+            let mut sink = CountingEventSink::default();
+            book.add_market_order(999_999, Side::Buy, 10_000, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -102,7 +108,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Cancel (head of queue)",
         prefilled_book,
         |book| {
-            book.cancel_order(1);
+            let mut sink = CountingEventSink::default();
+            book.cancel_order(1, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -113,7 +120,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Cancel (tail of queue)",
         crowded_sell_level,
         |book| {
-            book.cancel_order(CROWDED_LEVEL_ORDERS);
+            let mut sink = CountingEventSink::default();
+            book.cancel_order(CROWDED_LEVEL_ORDERS, &mut sink);
         },
         BENCH_ITERS,
     );
@@ -162,14 +170,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Realistic mix (per-op)",
         prefilled_book,
         |book| {
+            let mut sink = CountingEventSink::default();
             let idx = mix_cursor % 10;
             mix_cursor += 1;
             match idx {
                 0..=3 => {
-                    book.add_limit_order(999_990 + idx as u64, Side::Buy, 5_000 + idx as u64, 50);
+                    book.add_limit_order(999_990 + idx as u64, Side::Buy, 5_000 + idx as u64, 50, &mut sink);
                 }
                 4..=6 => {
-                    book.cancel_order(1 + (idx as u64 - 4) * 2);
+                    book.cancel_order(1 + (idx as u64 - 4) * 2, &mut sink);
                 }
                 7..=8 => {
                     book.add_limit_order(
@@ -177,6 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Side::Buy,
                         MID_PRICE + 1 + (idx as u64 - 7),
                         50,
+                        &mut sink,
                     );
                 }
                 _ => {
@@ -192,6 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4 add + 4 cancel (paired) + 2 BBO per 10 ops.
     struct ThroughputState {
         book: LimitOrderBookV0,
+        sink: CountingEventSink,
         cycle: usize,
     }
     runner.run(
@@ -199,6 +210,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Throughput (sustained mix)",
         || ThroughputState {
             book: prefilled_book(),
+            sink: CountingEventSink::default(),
             cycle: 0,
         },
         |state| {
@@ -206,10 +218,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for i in 0..4 {
                 state
                     .book
-                    .add_limit_order((base + i) as u64, Side::Buy, 5_000 + i as u64, 50);
+                    .add_limit_order((base + i) as u64, Side::Buy, 5_000 + i as u64, 50, &mut state.sink);
             }
             for i in 0..4 {
-                state.book.cancel_order((base + i) as u64);
+                state.book.cancel_order((base + i) as u64, &mut state.sink);
             }
             black_box(state.book.spread());
             black_box(state.book.spread());

@@ -1,19 +1,20 @@
 use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
-use limit_order_book::LimitOrderBookV0;
 use limit_order_book::types::Side;
+use limit_order_book::{CountingEventSink, LimitOrderBookV0};
 
 pub const ORDERS_PER_LEVEL: u64 = 10;
 const MID_PRICE: u64 = 10_000;
 
 fn prefilled_book(num_levels: u64, orders_per_level: u64) -> LimitOrderBookV0 {
     let mut book = LimitOrderBookV0::new();
+    let mut sink = CountingEventSink::default();
     let mut id = 1u64;
 
     for lvl in 0..num_levels {
         for _ in 0..orders_per_level {
-            book.add_limit_order(id, Side::Buy, MID_PRICE - 1 - lvl, 100);
+            book.add_limit_order(id, Side::Buy, MID_PRICE - 1 - lvl, 100, &mut sink);
             id += 1;
-            book.add_limit_order(id, Side::Sell, MID_PRICE + 1 + lvl, 100);
+            book.add_limit_order(id, Side::Sell, MID_PRICE + 1 + lvl, 100, &mut sink);
             id += 1;
         }
     }
@@ -34,7 +35,14 @@ fn bench_add_sweep_5(c: &mut Criterion) {
             b.iter_batched(
                 || prefilled_book(d, ORDERS_PER_LEVEL),
                 |mut book| {
-                    black_box(book.add_limit_order(999_999, Side::Buy, MID_PRICE + 5, 5_000));
+                    let mut sink = CountingEventSink::default();
+                    black_box(book.add_limit_order(
+                        999_999,
+                        Side::Buy,
+                        MID_PRICE + 5,
+                        5_000,
+                        &mut sink,
+                    ));
                 },
                 BatchSize::SmallInput,
             );
@@ -50,8 +58,9 @@ fn bench_cancel_queue_position(c: &mut Criterion) {
     for (queue_len, label) in [(100u64, "100"), (500u64, "500"), (1_000u64, "1000")] {
         let setup = move || {
             let mut book = LimitOrderBookV0::new();
+            let mut sink = CountingEventSink::default();
             for id in 1..=queue_len {
-                book.add_limit_order(id, Side::Sell, MID_PRICE + 1, 100);
+                book.add_limit_order(id, Side::Sell, MID_PRICE + 1, 100, &mut sink);
             }
             book
         };
@@ -59,7 +68,10 @@ fn bench_cancel_queue_position(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("head", label), &queue_len, |b, _| {
             b.iter_batched(
                 setup,
-                |mut book| black_box(book.cancel_order(1)),
+                |mut book| {
+                    let mut sink = CountingEventSink::default();
+                    black_box(book.cancel_order(1, &mut sink));
+                },
                 BatchSize::SmallInput,
             );
         });
@@ -67,7 +79,10 @@ fn bench_cancel_queue_position(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("tail", label), &queue_len, |b, &n| {
             b.iter_batched(
                 setup,
-                |mut book| black_box(book.cancel_order(n)),
+                |mut book| {
+                    let mut sink = CountingEventSink::default();
+                    black_box(book.cancel_order(n, &mut sink));
+                },
                 BatchSize::SmallInput,
             );
         });

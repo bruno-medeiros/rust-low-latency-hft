@@ -3,7 +3,7 @@ use crate::event::{Event, EventKind, RejectReason};
 use crate::types::Side;
 
 pub fn reject_zero_quantity(mut book: impl LimitOrderBook) {
-    let events = book.add_limit_order(1, Side::Buy, 100, 0);
+    let events = book.add_limit_order_vec(1, Side::Buy, 100, 0);
     assert!(matches!(
         events[0].kind,
         EventKind::Rejected {
@@ -15,7 +15,7 @@ pub fn reject_zero_quantity(mut book: impl LimitOrderBook) {
 }
 
 pub fn reject_zero_price(mut book: impl LimitOrderBook) {
-    let events = book.add_limit_order(1, Side::Buy, 0, 10);
+    let events = book.add_limit_order_vec(1, Side::Buy, 0, 10);
     assert!(matches!(
         events[0].kind,
         EventKind::Rejected {
@@ -26,7 +26,7 @@ pub fn reject_zero_price(mut book: impl LimitOrderBook) {
 }
 
 pub fn add_limit_order_rests_in_book(mut book: impl LimitOrderBook) {
-    let events = book.add_limit_order(1, Side::Buy, 100, 10);
+    let events = book.add_limit_order_vec(1, Side::Buy, 100, 10);
 
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, EventKind::Accepted { order_id: 1 });
@@ -36,9 +36,9 @@ pub fn add_limit_order_rests_in_book(mut book: impl LimitOrderBook) {
 }
 
 pub fn add_and_cancel(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Buy, 100, 10);
+    book.add_limit_order_vec(1, Side::Buy, 100, 10);
 
-    let events = book.cancel_order(1);
+    let events = book.cancel_order_vec(1);
     assert_eq!(events.len(), 1);
     assert_eq!(
         events[0].kind,
@@ -53,7 +53,7 @@ pub fn add_and_cancel(mut book: impl LimitOrderBook) {
 }
 
 pub fn cancel_unknown_order(mut book: impl LimitOrderBook) {
-    let events = book.cancel_order(999);
+    let events = book.cancel_order_vec(999);
 
     assert_eq!(events.len(), 1);
     assert_eq!(
@@ -66,11 +66,11 @@ pub fn cancel_unknown_order(mut book: impl LimitOrderBook) {
 }
 
 pub fn cancel_one_of_many_at_same_price(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
-    book.add_limit_order(2, Side::Sell, 100, 20);
-    book.add_limit_order(3, Side::Sell, 100, 30);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(2, Side::Sell, 100, 20);
+    book.add_limit_order_vec(3, Side::Sell, 100, 30);
 
-    let events = book.cancel_order(2);
+    let events = book.cancel_order_vec(2);
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0].kind,
@@ -88,8 +88,8 @@ pub fn cancel_one_of_many_at_same_price(mut book: impl LimitOrderBook) {
 }
 
 pub fn reject_duplicate_id(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Buy, 100, 10);
-    let events = book.add_limit_order(1, Side::Buy, 101, 5);
+    book.add_limit_order_vec(1, Side::Buy, 100, 10);
+    let events = book.add_limit_order_vec(1, Side::Buy, 101, 5);
     assert!(matches!(
         events[0].kind,
         EventKind::Rejected {
@@ -102,9 +102,9 @@ pub fn reject_duplicate_id(mut book: impl LimitOrderBook) {
 
 pub fn event_sequences_are_monotonic(mut book: impl LimitOrderBook) {
     let mut all: Vec<Event> = Vec::new();
-    all.extend(book.add_limit_order(1, Side::Sell, 100, 10));
-    all.extend(book.add_limit_order(2, Side::Buy, 100, 10));
-    all.extend(book.cancel_order(999));
+    all.extend(book.add_limit_order_vec(1, Side::Sell, 100, 10));
+    all.extend(book.add_limit_order_vec(2, Side::Buy, 100, 10));
+    all.extend(book.cancel_order_vec(999));
 
     for window in all.windows(2) {
         assert!(
@@ -118,10 +118,10 @@ pub fn event_sequences_are_monotonic(mut book: impl LimitOrderBook) {
 
 pub fn best_bid_best_ask(mut book: impl LimitOrderBook) {
     // Test best bid best ask over more complex cases
-    book.add_limit_order(1, Side::Buy, 100, 10);
-    book.add_limit_order(2, Side::Buy, 110, 20);
-    book.add_limit_order(3, Side::Sell, 120, 20);
-    book.add_limit_order(4, Side::Sell, 130, 10);
+    book.add_limit_order_vec(1, Side::Buy, 100, 10);
+    book.add_limit_order_vec(2, Side::Buy, 110, 20);
+    book.add_limit_order_vec(3, Side::Sell, 120, 20);
+    book.add_limit_order_vec(4, Side::Sell, 130, 10);
 
     assert_eq!(book.best_bid(), Some((110, 20)));
     assert_eq!(book.best_ask(), Some((120, 20)));
@@ -129,8 +129,8 @@ pub fn best_bid_best_ask(mut book: impl LimitOrderBook) {
     assert_eq!(book.depth(Side::Buy, 3), vec![(110, 20), (100, 10)]);
     assert_eq!(book.depth(Side::Sell, 3), vec![(120, 20), (130, 10)]);
 
-    book.cancel_order(2);
-    book.cancel_order(3);
+    book.cancel_order_vec(2);
+    book.cancel_order_vec(3);
 
     assert_eq!(book.best_bid(), Some((100, 10)));
     assert_eq!(book.best_ask(), Some((130, 10)));
@@ -140,9 +140,9 @@ pub fn best_bid_best_ask(mut book: impl LimitOrderBook) {
 }
 
 pub fn limit_order_full_match(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
 
-    let events = book.add_limit_order(2, Side::Buy, 100, 10);
+    let events = book.add_limit_order_vec(2, Side::Buy, 100, 10);
     assert_eq!(events.len(), 4);
     assert_eq!(events[0].kind, EventKind::Accepted { order_id: 2 });
     assert_eq!(
@@ -164,9 +164,9 @@ pub fn limit_order_full_match(mut book: impl LimitOrderBook) {
 }
 
 pub fn limit_order_partial_match_passive_remains(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
 
-    let events = book.add_limit_order(2, Side::Buy, 100, 5);
+    let events = book.add_limit_order_vec(2, Side::Buy, 100, 5);
     assert_eq!(events.len(), 3);
     assert_eq!(
         events[1].kind,
@@ -187,12 +187,12 @@ pub fn limit_order_partial_match_passive_remains(mut book: impl LimitOrderBook) 
 }
 
 pub fn market_order_full_fill(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 5);
-    book.add_limit_order(2, Side::Sell, 101, 5);
+    book.add_limit_order_vec(1, Side::Sell, 100, 5);
+    book.add_limit_order_vec(2, Side::Sell, 101, 5);
     assert_eq!(book.order_count(), 2);
     assert!(book.order(1).is_some());
 
-    let events = book.add_market_order(3, Side::Buy, 8);
+    let events = book.add_market_order_vec(3, Side::Buy, 8);
 
     let fills: Vec<_> = events
         .iter()
@@ -224,9 +224,9 @@ pub fn market_order_full_fill(mut book: impl LimitOrderBook) {
 }
 
 pub fn market_order_partial_fill_exhausts_book_and_emits_cancel(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 5);
+    book.add_limit_order_vec(1, Side::Sell, 100, 5);
 
-    let events = book.add_market_order(2, Side::Buy, 10);
+    let events = book.add_market_order_vec(2, Side::Buy, 10);
     assert!(events.iter().any(|e| matches!(
         e.kind,
         EventKind::Cancelled {
@@ -238,9 +238,9 @@ pub fn market_order_partial_fill_exhausts_book_and_emits_cancel(mut book: impl L
 }
 
 pub fn market_order_rejects_duplicate_id(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
 
-    let events = book.add_market_order(1, Side::Buy, 5);
+    let events = book.add_market_order_vec(1, Side::Buy, 5);
     assert_eq!(events.len(), 1);
     assert!(matches!(
         events[0].kind,
@@ -253,9 +253,9 @@ pub fn market_order_rejects_duplicate_id(mut book: impl LimitOrderBook) {
 }
 
 pub fn market_order_emits_accepted_event(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
 
-    let events = book.add_market_order(2, Side::Buy, 5);
+    let events = book.add_market_order_vec(2, Side::Buy, 5);
     assert!(matches!(
         events[0].kind,
         EventKind::Accepted { order_id: 2 }
@@ -265,10 +265,10 @@ pub fn market_order_emits_accepted_event(mut book: impl LimitOrderBook) {
 // ==== More matching tests
 
 pub fn fifo_priority(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
-    book.add_limit_order(2, Side::Sell, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(2, Side::Sell, 100, 10);
 
-    let events = book.add_limit_order(3, Side::Buy, 100, 10);
+    let events = book.add_limit_order_vec(3, Side::Buy, 100, 10);
     assert!(matches!(
         events[1].kind,
         EventKind::Fill {
@@ -283,13 +283,13 @@ pub fn fifo_priority(mut book: impl LimitOrderBook) {
 }
 
 pub fn cancel_front_preserves_fifo_for_remaining(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 10);
-    book.add_limit_order(2, Side::Sell, 100, 10);
-    book.add_limit_order(3, Side::Sell, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
+    book.add_limit_order_vec(2, Side::Sell, 100, 10);
+    book.add_limit_order_vec(3, Side::Sell, 100, 10);
 
-    book.cancel_order(1);
+    book.cancel_order_vec(1);
 
-    let events = book.add_limit_order(4, Side::Buy, 100, 10);
+    let events = book.add_limit_order_vec(4, Side::Buy, 100, 10);
     assert!(matches!(
         events[1].kind,
         EventKind::Fill {
@@ -302,11 +302,11 @@ pub fn cancel_front_preserves_fifo_for_remaining(mut book: impl LimitOrderBook) 
 }
 
 pub fn multi_level_sweep(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 5);
-    book.add_limit_order(2, Side::Sell, 101, 5);
-    book.add_limit_order(3, Side::Sell, 102, 5);
+    book.add_limit_order_vec(1, Side::Sell, 100, 5);
+    book.add_limit_order_vec(2, Side::Sell, 101, 5);
+    book.add_limit_order_vec(3, Side::Sell, 102, 5);
 
-    let events = book.add_limit_order(4, Side::Buy, 102, 12);
+    let events = book.add_limit_order_vec(4, Side::Buy, 102, 12);
 
     let fills: Vec<_> = events
         .iter()
@@ -346,8 +346,8 @@ pub fn multi_level_sweep(mut book: impl LimitOrderBook) {
 }
 
 pub fn no_match_when_prices_dont_cross(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 101, 10);
-    book.add_limit_order(2, Side::Buy, 99, 10);
+    book.add_limit_order_vec(1, Side::Sell, 101, 10);
+    book.add_limit_order_vec(2, Side::Buy, 99, 10);
 
     assert_eq!(book.best_bid(), Some((99, 10)));
     assert_eq!(book.best_ask(), Some((101, 10)));
@@ -356,10 +356,10 @@ pub fn no_match_when_prices_dont_cross(mut book: impl LimitOrderBook) {
 }
 
 pub fn sell_side_matching_hits_best_bid_first(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Buy, 100, 10);
-    book.add_limit_order(2, Side::Buy, 99, 10);
+    book.add_limit_order_vec(1, Side::Buy, 100, 10);
+    book.add_limit_order_vec(2, Side::Buy, 99, 10);
 
-    let events = book.add_limit_order(3, Side::Sell, 99, 15);
+    let events = book.add_limit_order_vec(3, Side::Sell, 99, 15);
 
     let fills: Vec<_> = events
         .iter()
@@ -389,8 +389,8 @@ pub fn sell_side_matching_hits_best_bid_first(mut book: impl LimitOrderBook) {
 }
 
 pub fn order_preserves_original_qty_after_partial_fill(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 3);
-    book.add_limit_order(2, Side::Buy, 100, 10);
+    book.add_limit_order_vec(1, Side::Sell, 100, 3);
+    book.add_limit_order_vec(2, Side::Buy, 100, 10);
 
     let order = book.order(2).unwrap();
     assert_eq!(order.qty, 10, "original qty must be preserved");
@@ -398,11 +398,11 @@ pub fn order_preserves_original_qty_after_partial_fill(mut book: impl LimitOrder
 }
 
 pub fn sweep_multiple_orders_at_same_level(mut book: impl LimitOrderBook) {
-    book.add_limit_order(1, Side::Sell, 100, 5);
-    book.add_limit_order(2, Side::Sell, 100, 5);
-    book.add_limit_order(3, Side::Sell, 100, 5);
+    book.add_limit_order_vec(1, Side::Sell, 100, 5);
+    book.add_limit_order_vec(2, Side::Sell, 100, 5);
+    book.add_limit_order_vec(3, Side::Sell, 100, 5);
 
-    let events = book.add_limit_order(4, Side::Buy, 100, 12);
+    let events = book.add_limit_order_vec(4, Side::Buy, 100, 12);
 
     let fills: Vec<_> = events
         .iter()

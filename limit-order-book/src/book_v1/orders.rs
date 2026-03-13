@@ -32,7 +32,7 @@ impl BookOrders {
     pub fn existing_order(&mut self, order_id: OrderId) -> &mut OrderSlot {
         self.orders[order_id as usize]
             .as_mut()
-            .expect(format!("order {} exists", order_id).as_str())
+            .unwrap_or_else(|| panic!("order {} exists", order_id))
     }
 
     pub fn add_order(&mut self, order_id: OrderId, order: Order) -> &mut OrderSlot {

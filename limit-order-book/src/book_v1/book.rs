@@ -1,14 +1,14 @@
 use crate::LimitOrderBook;
 use crate::book_v1::orders::BookOrders;
 use crate::book_v1::price_level::PriceLevel;
-use crate::event::{Event, EventKind, RejectReason};
+use crate::event::{Event, EventKind, EventSink, RejectReason};
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 
-fn emit(seq: &mut u64, kind: EventKind) -> Event {
+fn emit(events: &mut impl EventSink, seq: &mut u64, kind: EventKind) {
     let s = *seq;
     *seq += 1;
-    Event { sequence: s, kind }
+    events.push(Event { sequence: s, kind })
 }
 
 #[derive(Debug)]
@@ -173,8 +173,8 @@ impl LimitOrderBookV1 {
         }
     }
 
-    fn emit(&mut self, kind: EventKind) -> Event {
-        emit(&mut self.next_seq, kind)
+    fn emit(&mut self, events: &mut impl EventSink, kind: EventKind) {
+        emit(events, &mut self.next_seq, kind)
     }
 
     // -- queries -----------------------------------------------------------
@@ -227,33 +227,35 @@ impl LimitOrderBookV1 {
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Vec<Event> {
-        if let Some(value) = self.validate_order_qty(order_id, qty) {
-            return value;
+        events: &mut impl EventSink,
+    ) {
+        if self.validate_order_qty(order_id, qty, events) {
+            return;
         }
         if price == 0 {
-            return vec![self.emit(EventKind::Rejected {
+            self.emit(events, EventKind::Rejected {
                 order_id,
                 reason: RejectReason::InvalidPrice,
-            })];
+            });
+            return;
         }
 
         if self.order(order_id).is_some() {
-            return vec![self.emit(EventKind::Rejected {
+            self.emit(events, EventKind::Rejected {
                 order_id,
                 reason: RejectReason::DuplicateOrderId,
-            })];
+            });
+            return;
         }
-        let mut events = Vec::new();
 
-        events.push(self.emit(EventKind::Accepted { order_id }));
+        self.emit(events, EventKind::Accepted { order_id });
         let order_seq = self.next_seq;
 
         let mut remaining_qty = qty;
-        self.match_order(order_id, side, price, &mut remaining_qty, &mut events);
+        self.match_order(order_id, side, price, &mut remaining_qty, events);
 
         if remaining_qty == 0 {
-            events.push(self.emit(EventKind::Filled { order_id }));
+            self.emit(events, EventKind::Filled { order_id });
         } else {
             let order = Order {
                 id: order_id,
@@ -271,72 +273,71 @@ impl LimitOrderBookV1 {
             let order_slot = self.orders.add_order(order_id, order);
             order_slot.prev = old_tail;
         }
-
-        events
     }
 
-    fn validate_order_qty(&mut self, id: OrderId, qty: Qty) -> Option<Vec<Event>> {
+    /// Returns true if validation failed (invalid qty) and events were emitted.
+    fn validate_order_qty(&mut self, id: OrderId, qty: Qty, events: &mut impl EventSink) -> bool {
         if qty == 0 {
-            return Some(vec![self.emit(EventKind::Rejected {
+            self.emit(events, EventKind::Rejected {
                 order_id: id,
                 reason: RejectReason::InvalidQuantity,
-            })]);
+            });
+            return true;
         }
-
-        None
+        false
     }
 
-    pub fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
-        if let Some(value) = self.validate_order_qty(order_id, qty) {
-            return value;
+    pub fn add_market_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        qty: Qty,
+        events: &mut impl EventSink,
+    ) {
+        if self.validate_order_qty(order_id, qty, events) {
+            return;
         }
         if self.order(order_id).is_some() {
-            return vec![self.emit(EventKind::Rejected {
+            self.emit(events, EventKind::Rejected {
                 order_id,
                 reason: RejectReason::DuplicateOrderId,
-            })];
+            });
+            return;
         }
-        let mut events = Vec::new();
 
-        events.push(self.emit(EventKind::Accepted { order_id }));
+        self.emit(events, EventKind::Accepted { order_id });
 
         let price = match side {
             Side::Buy => Price::MAX,
             Side::Sell => Price::MIN,
         };
         let mut qty = qty;
-        self.match_order(order_id, side, price, &mut qty, &mut events);
+        self.match_order(order_id, side, price, &mut qty, events);
 
         if qty == 0 {
-            events.push(self.emit(EventKind::Filled { order_id }));
+            self.emit(events, EventKind::Filled { order_id });
         } else {
-            events.push(self.emit(EventKind::Cancelled {
+            self.emit(events, EventKind::Cancelled {
                 order_id,
                 remaining_qty: qty,
-            }));
+            });
         }
-
-        events
     }
 
-    pub fn cancel_order(&mut self, order_id: OrderId) -> Vec<Event> {
+    pub fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink) {
         match self.orders.order(order_id) {
             None => {
-                vec![self.emit(EventKind::Rejected {
+                self.emit(events, EventKind::Rejected {
                     order_id,
                     reason: RejectReason::UnknownOrder,
-                })]
+                });
             }
             Some(_) => {
                 let order_slot = self.remove_order(order_id);
-
-                let mut events = Vec::new();
-                events.push(self.emit(EventKind::Cancelled {
+                self.emit(events, EventKind::Cancelled {
                     order_id,
                     remaining_qty: order_slot.order.remaining_qty,
-                }));
-
-                events
+                });
             }
         }
     }
@@ -359,7 +360,7 @@ impl LimitOrderBookV1 {
         side: Side,
         price: Price,
         qty: &mut Qty,
-        events: &mut Vec<Event>,
+        events: &mut impl EventSink,
     ) {
         while *qty > 0 {
             let price_level = match side {
@@ -395,7 +396,7 @@ impl LimitOrderBookV1 {
         side: Side,
         matched_price: Price,
         qty: &mut Qty,
-        events: &mut Vec<Event>,
+        events: &mut impl EventSink,
     ) {
         let price_level = self.price_levels.existing_level(matched_price);
 
@@ -406,7 +407,8 @@ impl LimitOrderBookV1 {
             let passive_remaining_qty = passive_order.order.remaining_qty;
 
             let fill_qty = passive_remaining_qty.min(*qty);
-            events.push(emit(
+            emit(
+                events,
                 &mut self.next_seq,
                 EventKind::Fill {
                     passive_order_id,
@@ -414,19 +416,20 @@ impl LimitOrderBookV1 {
                     price: matched_price,
                     qty: fill_qty,
                 },
-            ));
+            );
 
             if *qty >= passive_remaining_qty {
                 price_level.remove(passive_order);
 
                 self.orders.remove_order(passive_order_id);
 
-                events.push(emit(
+                emit(
+                    events,
                     &mut self.next_seq,
                     EventKind::Filled {
                         order_id: passive_order_id,
                     },
-                ));
+                );
 
                 *qty -= passive_remaining_qty;
             } else {
@@ -469,16 +472,23 @@ impl LimitOrderBook for LimitOrderBookV1 {
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Vec<Event> {
-        LimitOrderBookV1::add_limit_order(self, order_id, side, price, qty)
+        events: &mut impl EventSink,
+    ) {
+        LimitOrderBookV1::add_limit_order(self, order_id, side, price, qty, events)
     }
 
-    fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
-        LimitOrderBookV1::add_market_order(self, order_id, side, qty)
+    fn add_market_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        qty: Qty,
+        events: &mut impl EventSink,
+    ) {
+        LimitOrderBookV1::add_market_order(self, order_id, side, qty, events)
     }
 
-    fn cancel_order(&mut self, order_id: OrderId) -> Vec<Event> {
-        LimitOrderBookV1::cancel_order(self, order_id)
+    fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink) {
+        LimitOrderBookV1::cancel_order(self, order_id, events)
     }
 }
 
@@ -515,55 +525,55 @@ mod tests {
     #[test]
     fn order_chaining_linked_list() {
         let mut book = LimitOrderBookV1::new((0, 10_000), 10_000_000);
-        book.add_limit_order(1, Side::Buy, 100, 10);
+        book.add_limit_order_vec(1, Side::Buy, 100, 10);
         assert!(book.lvl_orders(100) == vec![1]);
 
-        book.add_limit_order(2, Side::Buy, 100, 5);
+        book.add_limit_order_vec(2, Side::Buy, 100, 5);
         assert!(book.lvl_orders(100) == vec![1, 2]);
 
-        book.add_limit_order(3, Side::Buy, 100, 5);
+        book.add_limit_order_vec(3, Side::Buy, 100, 5);
         assert!(book.lvl_orders(100) == vec![1, 2, 3]);
 
         // --- Test cancelling:
 
         // Cancel middle
-        book.cancel_order(2);
+        book.cancel_order_vec(2);
         assert_eq!(book.lvl_head_tail(100), (Some(1), Some(3)));
         assert!(book.lvl_orders(100) == vec![1, 3]);
 
         // Cancel head
-        book.cancel_order(1);
+        book.cancel_order_vec(1);
         assert!(book.lvl_orders(100) == vec![3]);
 
         // Cancel head-tail
-        book.cancel_order(3);
+        book.cancel_order_vec(3);
         assert!(book.price_levels.levels[100].is_none());
     }
 
     #[test]
     fn order_chaining_linked_list_after_matching() {
         let mut book = LimitOrderBookV1::new((0, 10_000), 10_000_000);
-        book.add_limit_order(1, Side::Buy, 100, 10);
-        book.add_limit_order(2, Side::Buy, 100, 5);
-        book.add_limit_order(3, Side::Buy, 100, 5);
+        book.add_limit_order_vec(1, Side::Buy, 100, 10);
+        book.add_limit_order_vec(2, Side::Buy, 100, 5);
+        book.add_limit_order_vec(3, Side::Buy, 100, 5);
         assert!(book.lvl_orders(100) == vec![1, 2, 3]);
 
         // Matching follows a different path than cancelling orders
 
         // Fill order 1
-        book.add_limit_order(11, Side::Sell, 100, 10);
+        book.add_limit_order_vec(11, Side::Sell, 100, 10);
         assert!(book.lvl_orders(100) == vec![2, 3]);
 
         // Fill order 2 (partial)
-        book.add_limit_order(12, Side::Sell, 100, 2);
+        book.add_limit_order_vec(12, Side::Sell, 100, 2);
         assert!(book.lvl_orders(100) == vec![2, 3]);
 
         // Fill order 2 (partial)
-        book.add_limit_order(13, Side::Sell, 100, 3);
+        book.add_limit_order_vec(13, Side::Sell, 100, 3);
         assert!(book.lvl_orders(100) == vec![3]);
 
         // Fill order 3
-        book.add_limit_order(14, Side::Sell, 100, 5);
+        book.add_limit_order_vec(14, Side::Sell, 100, 5);
         assert!(book.price_levels.levels[100].is_none());
     }
 }

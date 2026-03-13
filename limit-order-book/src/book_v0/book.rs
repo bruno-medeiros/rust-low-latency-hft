@@ -1,6 +1,6 @@
 use crate::LimitOrderBook;
 use crate::book_v0::price_level::PriceLevel;
-use crate::event::{Event, EventKind, RejectReason};
+use crate::event::{Event, EventKind, EventSink, RejectReason};
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 use std::collections::btree_map::Iter;
@@ -15,12 +15,14 @@ pub struct LimitOrderBookV0 {
     pub(crate) next_seq: u64,
 }
 
-fn emit(seq: &mut u64, kind: EventKind) -> Event {
+//noinspection DuplicatedCode
+fn emit(events: &mut impl EventSink, seq: &mut u64, kind: EventKind) {
     let s = *seq;
     *seq += 1;
-    Event { sequence: s, kind }
+    events.push(Event { sequence: s, kind })
 }
 
+//noinspection DuplicatedCode
 impl LimitOrderBookV0 {
     pub fn new() -> Self {
         Self {
@@ -31,8 +33,8 @@ impl LimitOrderBookV0 {
         }
     }
 
-    fn emit(&mut self, kind: EventKind) -> Event {
-        emit(&mut self.next_seq, kind)
+    fn emit(&mut self, events: &mut impl EventSink, kind: EventKind) {
+        emit(events, &mut self.next_seq, kind)
     }
 
     // -- queries -----------------------------------------------------------
@@ -94,33 +96,41 @@ impl LimitOrderBookV0 {
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Vec<Event> {
-        if let Some(value) = self.validate_order_qty(order_id, qty) {
-            return value;
+        events: &mut impl EventSink,
+    ) {
+        if self.validate_order_qty(order_id, qty, events) {
+            return;
         }
         if price == 0 {
-            return vec![self.emit(EventKind::Rejected {
-                order_id,
-                reason: RejectReason::InvalidPrice,
-            })];
+            self.emit(
+                events,
+                EventKind::Rejected {
+                    order_id,
+                    reason: RejectReason::InvalidPrice,
+                },
+            );
+            return;
         }
 
         if self.orders.contains_key(&order_id) {
-            return vec![self.emit(EventKind::Rejected {
-                order_id,
-                reason: RejectReason::DuplicateOrderId,
-            })];
+            self.emit(
+                events,
+                EventKind::Rejected {
+                    order_id,
+                    reason: RejectReason::DuplicateOrderId,
+                },
+            );
+            return;
         }
-        let mut events = Vec::new();
 
-        events.push(self.emit(EventKind::Accepted { order_id }));
+        self.emit(events, EventKind::Accepted { order_id });
         let order_seq = self.next_seq;
 
         let mut remaining_qty = qty;
-        self.match_order(order_id, side, price, &mut remaining_qty, &mut events);
+        self.match_order(order_id, side, price, &mut remaining_qty, events);
 
         if remaining_qty == 0 {
-            events.push(self.emit(EventKind::Filled { order_id }));
+            self.emit(events, EventKind::Filled { order_id });
         } else {
             self.orders.insert(
                 order_id,
@@ -143,65 +153,78 @@ impl LimitOrderBookV0 {
                 .or_default()
                 .push(order_id, remaining_qty);
         }
-
-        events
     }
 
-    fn validate_order_qty(&mut self, id: OrderId, qty: Qty) -> Option<Vec<Event>> {
+    /// Returns true if validation failed (invalid qty) and events were emitted.
+    fn validate_order_qty(&mut self, id: OrderId, qty: Qty, events: &mut impl EventSink) -> bool {
         if qty == 0 {
-            return Some(vec![self.emit(EventKind::Rejected {
-                order_id: id,
-                reason: RejectReason::InvalidQuantity,
-            })]);
+            self.emit(
+                events,
+                EventKind::Rejected {
+                    order_id: id,
+                    reason: RejectReason::InvalidQuantity,
+                },
+            );
+            return true;
         }
-
-        None
+        false
     }
 
-    pub fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
-        if let Some(value) = self.validate_order_qty(order_id, qty) {
-            return value;
+    pub fn add_market_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        qty: Qty,
+        events: &mut impl EventSink,
+    ) {
+        if self.validate_order_qty(order_id, qty, events) {
+            return;
         }
         if self.orders.contains_key(&order_id) {
-            return vec![self.emit(EventKind::Rejected {
-                order_id,
-                reason: RejectReason::DuplicateOrderId,
-            })];
+            self.emit(
+                events,
+                EventKind::Rejected {
+                    order_id,
+                    reason: RejectReason::DuplicateOrderId,
+                },
+            );
+            return;
         }
-        let mut events = Vec::new();
 
-        events.push(self.emit(EventKind::Accepted { order_id }));
+        self.emit(events, EventKind::Accepted { order_id });
 
         let price = match side {
             Side::Buy => Price::MAX,
             Side::Sell => Price::MIN,
         };
         let mut qty = qty;
-        self.match_order(order_id, side, price, &mut qty, &mut events);
+        self.match_order(order_id, side, price, &mut qty, events);
 
         if qty == 0 {
-            events.push(self.emit(EventKind::Filled { order_id }));
+            self.emit(events, EventKind::Filled { order_id });
         } else {
-            events.push(self.emit(EventKind::Cancelled {
-                order_id,
-                remaining_qty: qty,
-            }));
+            self.emit(
+                events,
+                EventKind::Cancelled {
+                    order_id,
+                    remaining_qty: qty,
+                },
+            );
         }
-
-        events
     }
 
-    pub fn cancel_order(&mut self, id: OrderId) -> Vec<Event> {
+    pub fn cancel_order(&mut self, id: OrderId, events: &mut impl EventSink) {
         match self.orders.remove(&id) {
             None => {
-                vec![self.emit(EventKind::Rejected {
-                    order_id: id,
-                    reason: RejectReason::UnknownOrder,
-                })]
+                self.emit(
+                    events,
+                    EventKind::Rejected {
+                        order_id: id,
+                        reason: RejectReason::UnknownOrder,
+                    },
+                );
             }
             Some(order) => {
-                let mut events = Vec::new();
-
                 let book_side = match order.side {
                     Side::Buy => &mut self.bids,
                     Side::Sell => &mut self.asks,
@@ -215,12 +238,13 @@ impl LimitOrderBookV0 {
                     }
                 };
 
-                events.push(self.emit(EventKind::Cancelled {
-                    order_id: id,
-                    remaining_qty: order.remaining_qty,
-                }));
-
-                events
+                self.emit(
+                    events,
+                    EventKind::Cancelled {
+                        order_id: id,
+                        remaining_qty: order.remaining_qty,
+                    },
+                );
             }
         }
     }
@@ -231,7 +255,7 @@ impl LimitOrderBookV0 {
         side: Side,
         price: Price,
         qty: &mut Qty,
-        events: &mut Vec<Event>,
+        events: &mut impl EventSink,
     ) {
         while *qty > 0 {
             let (matched_price, price_level) = match side {
@@ -280,7 +304,7 @@ impl LimitOrderBookV0 {
     pub(super) fn fulfill_in_price_level(
         price_level: &mut PriceLevel,
         orders: &mut HashMap<OrderId, Order>,
-        events: &mut Vec<Event>,
+        events: &mut impl EventSink,
         next_seq: &mut u64,
         aggressor_order_id: OrderId,
         qty: &mut Qty,
@@ -295,7 +319,8 @@ impl LimitOrderBookV0 {
             let price = passive_order.price;
 
             let fill_qty = passive_remaining_qty.min(*qty);
-            events.push(emit(
+            emit(
+                events,
                 next_seq,
                 EventKind::Fill {
                     passive_order_id,
@@ -303,17 +328,18 @@ impl LimitOrderBookV0 {
                     price,
                     qty: fill_qty,
                 },
-            ));
+            );
 
             if *qty >= passive_remaining_qty {
                 price_level.remove(passive_order_id, passive_remaining_qty);
 
-                events.push(emit(
+                emit(
+                    events,
                     next_seq,
                     EventKind::Filled {
                         order_id: passive_order_id,
                     },
-                ));
+                );
                 orders.remove(&passive_order_id);
 
                 *qty -= passive_remaining_qty;
@@ -359,15 +385,22 @@ impl LimitOrderBook for LimitOrderBookV0 {
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Vec<Event> {
-        LimitOrderBookV0::add_limit_order(self, order_id, side, price, qty)
+        events: &mut impl EventSink,
+    ) {
+        LimitOrderBookV0::add_limit_order(self, order_id, side, price, qty, events)
     }
 
-    fn add_market_order(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
-        LimitOrderBookV0::add_market_order(self, order_id, side, qty)
+    fn add_market_order(
+        &mut self,
+        order_id: OrderId,
+        side: Side,
+        qty: Qty,
+        events: &mut impl EventSink,
+    ) {
+        LimitOrderBookV0::add_market_order(self, order_id, side, qty, events)
     }
 
-    fn cancel_order(&mut self, order_id: OrderId) -> Vec<Event> {
-        LimitOrderBookV0::cancel_order(self, order_id)
+    fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink) {
+        LimitOrderBookV0::cancel_order(self, order_id, events)
     }
 }
