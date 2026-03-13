@@ -10,16 +10,19 @@ mkdir -p "$RESULTS_DIR"
 # ── Benchmark reports ─────────────────────────────────────────────────────────
 
 echo "=== Benchmark: LOB v0 (baseline) ==="
+mkdir "$RESULTS_DIR/v0"
 cargo bench --bench lob -- \
     --lob-version v0 \
     --save-json "$RESULTS_DIR/v0/lob.json" \
     --save-md "$RESULTS_DIR/v0/lob.md"
-  cargo flamegraph --bench lob \
-      -o "$RESULTS_DIR/v0/flamegraph.svg" \
-      -- --filter Throughput --lob-version "v0"
+
+cargo flamegraph --bench lob \
+    -o "$RESULTS_DIR/v0/flamegraph.svg" \
+    -- --filter Throughput --lob-version "v0"
 
 echo ""
 echo "=== Benchmark: LOB v1 (vs v0 baseline) ==="
+mkdir "$RESULTS_DIR/v1"
 cargo bench --bench lob -- \
     --lob-version v1 \
     --baseline "$RESULTS_DIR/v0/lob.json" \
@@ -32,4 +35,4 @@ cargo flamegraph --bench lob \
 
 echo ""
 echo "Done. Results in ${RESULTS_DIR}/:"
-ls -la "$RESULTS_DIR/"
+tree "$RESULTS_DIR/"
