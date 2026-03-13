@@ -233,18 +233,15 @@ impl LimitOrderBookV1 {
             return;
         }
         if price == 0 {
-            self.emit(events, EventKind::Rejected {
-                order_id,
-                reason: RejectReason::InvalidPrice,
-            });
+            self.emit(events, EventKind::rejected(order_id, RejectReason::InvalidPrice));
             return;
         }
 
         if self.order(order_id).is_some() {
-            self.emit(events, EventKind::Rejected {
-                order_id,
-                reason: RejectReason::DuplicateOrderId,
-            });
+            self.emit(
+                events,
+                EventKind::rejected(order_id, RejectReason::DuplicateOrderId),
+            );
             return;
         }
 
@@ -278,10 +275,7 @@ impl LimitOrderBookV1 {
     /// Returns true if validation failed (invalid qty) and events were emitted.
     fn validate_order_qty(&mut self, id: OrderId, qty: Qty, events: &mut impl EventSink) -> bool {
         if qty == 0 {
-            self.emit(events, EventKind::Rejected {
-                order_id: id,
-                reason: RejectReason::InvalidQuantity,
-            });
+            self.emit(events, EventKind::rejected(id, RejectReason::InvalidQuantity));
             return true;
         }
         false
@@ -298,10 +292,10 @@ impl LimitOrderBookV1 {
             return;
         }
         if self.order(order_id).is_some() {
-            self.emit(events, EventKind::Rejected {
-                order_id,
-                reason: RejectReason::DuplicateOrderId,
-            });
+            self.emit(
+                events,
+                EventKind::rejected(order_id, RejectReason::DuplicateOrderId),
+            );
             return;
         }
 
@@ -317,27 +311,21 @@ impl LimitOrderBookV1 {
         if qty == 0 {
             self.emit(events, EventKind::Filled { order_id });
         } else {
-            self.emit(events, EventKind::Cancelled {
-                order_id,
-                remaining_qty: qty,
-            });
+            self.emit(events, EventKind::cancelled(order_id, qty));
         }
     }
 
     pub fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink) {
         match self.orders.order(order_id) {
             None => {
-                self.emit(events, EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::UnknownOrder,
-                });
+                self.emit(events, EventKind::rejected(order_id, RejectReason::UnknownOrder));
             }
             Some(_) => {
                 let order_slot = self.remove_order(order_id);
-                self.emit(events, EventKind::Cancelled {
-                    order_id,
-                    remaining_qty: order_slot.order.remaining_qty,
-                });
+                self.emit(
+                    events,
+                    EventKind::cancelled(order_id, order_slot.order.remaining_qty),
+                );
             }
         }
     }

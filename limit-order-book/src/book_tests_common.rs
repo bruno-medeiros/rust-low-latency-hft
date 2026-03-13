@@ -4,25 +4,19 @@ use crate::types::Side;
 
 pub fn reject_zero_quantity(mut book: impl LimitOrderBook) {
     let events = book.add_limit_order_vec(1, Side::Buy, 100, 0);
-    assert!(matches!(
+    assert_eq!(
         events[0].kind,
-        EventKind::Rejected {
-            reason: RejectReason::InvalidQuantity,
-            ..
-        }
-    ));
+        EventKind::rejected(1, RejectReason::InvalidQuantity)
+    );
     assert_eq!(book.order_count(), 0);
 }
 
 pub fn reject_zero_price(mut book: impl LimitOrderBook) {
     let events = book.add_limit_order_vec(1, Side::Buy, 0, 10);
-    assert!(matches!(
+    assert_eq!(
         events[0].kind,
-        EventKind::Rejected {
-            reason: RejectReason::InvalidPrice,
-            ..
-        }
-    ));
+        EventKind::rejected(1, RejectReason::InvalidPrice)
+    );
 }
 
 pub fn add_limit_order_rests_in_book(mut book: impl LimitOrderBook) {
@@ -40,13 +34,7 @@ pub fn add_and_cancel(mut book: impl LimitOrderBook) {
 
     let events = book.cancel_order_vec(1);
     assert_eq!(events.len(), 1);
-    assert_eq!(
-        events[0].kind,
-        EventKind::Cancelled {
-            order_id: 1,
-            remaining_qty: 10
-        }
-    );
+    assert_eq!(events[0].kind, EventKind::cancelled(1, 10));
     assert_eq!(book.best_bid(), None);
     assert_eq!(book.best_ask(), None);
     assert_eq!(book.order_count(), 0);
@@ -58,10 +46,7 @@ pub fn cancel_unknown_order(mut book: impl LimitOrderBook) {
     assert_eq!(events.len(), 1);
     assert_eq!(
         events[0].kind,
-        EventKind::Rejected {
-            order_id: 999,
-            reason: RejectReason::UnknownOrder
-        }
+        EventKind::rejected(999, RejectReason::UnknownOrder)
     );
 }
 
@@ -72,13 +57,7 @@ pub fn cancel_one_of_many_at_same_price(mut book: impl LimitOrderBook) {
 
     let events = book.cancel_order_vec(2);
     assert_eq!(events.len(), 1);
-    assert!(matches!(
-        events[0].kind,
-        EventKind::Cancelled {
-            order_id: 2,
-            remaining_qty: 20
-        }
-    ));
+    assert_eq!(events[0].kind, EventKind::cancelled(2, 20));
 
     assert_eq!(book.order_count(), 2);
     assert_eq!(book.best_ask(), Some((100, 40)));
@@ -90,13 +69,10 @@ pub fn cancel_one_of_many_at_same_price(mut book: impl LimitOrderBook) {
 pub fn reject_duplicate_id(mut book: impl LimitOrderBook) {
     book.add_limit_order_vec(1, Side::Buy, 100, 10);
     let events = book.add_limit_order_vec(1, Side::Buy, 101, 5);
-    assert!(matches!(
+    assert_eq!(
         events[0].kind,
-        EventKind::Rejected {
-            reason: RejectReason::DuplicateOrderId,
-            ..
-        }
-    ));
+        EventKind::rejected(1, RejectReason::DuplicateOrderId)
+    );
     assert_eq!(book.order_count(), 1);
 }
 
@@ -227,13 +203,9 @@ pub fn market_order_partial_fill_exhausts_book_and_emits_cancel(mut book: impl L
     book.add_limit_order_vec(1, Side::Sell, 100, 5);
 
     let events = book.add_market_order_vec(2, Side::Buy, 10);
-    assert!(events.iter().any(|e| matches!(
-        e.kind,
-        EventKind::Cancelled {
-            order_id: 2,
-            remaining_qty: 5
-        }
-    )));
+    assert!(events
+        .iter()
+        .any(|e| e.kind == EventKind::cancelled(2, 5)));
     assert_eq!(book.best_ask(), None);
 }
 
@@ -242,13 +214,10 @@ pub fn market_order_rejects_duplicate_id(mut book: impl LimitOrderBook) {
 
     let events = book.add_market_order_vec(1, Side::Buy, 5);
     assert_eq!(events.len(), 1);
-    assert!(matches!(
+    assert_eq!(
         events[0].kind,
-        EventKind::Rejected {
-            order_id: 1,
-            reason: RejectReason::DuplicateOrderId
-        }
-    ));
+        EventKind::rejected(1, RejectReason::DuplicateOrderId)
+    );
     assert_eq!(book.best_ask(), Some((100, 10)));
 }
 
