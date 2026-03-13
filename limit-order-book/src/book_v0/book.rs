@@ -102,23 +102,14 @@ impl LimitOrderBookV0 {
             return;
         }
         if price == 0 {
-            self.emit(
-                events,
-                EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::InvalidPrice,
-                },
-            );
+            self.emit(events, EventKind::rejected(order_id, RejectReason::InvalidPrice));
             return;
         }
 
         if self.orders.contains_key(&order_id) {
             self.emit(
                 events,
-                EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::DuplicateOrderId,
-                },
+                EventKind::rejected(order_id, RejectReason::DuplicateOrderId),
             );
             return;
         }
@@ -160,10 +151,7 @@ impl LimitOrderBookV0 {
         if qty == 0 {
             self.emit(
                 events,
-                EventKind::Rejected {
-                    order_id: id,
-                    reason: RejectReason::InvalidQuantity,
-                },
+                EventKind::rejected(id, RejectReason::InvalidQuantity),
             );
             return true;
         }
@@ -183,10 +171,7 @@ impl LimitOrderBookV0 {
         if self.orders.contains_key(&order_id) {
             self.emit(
                 events,
-                EventKind::Rejected {
-                    order_id,
-                    reason: RejectReason::DuplicateOrderId,
-                },
+                EventKind::rejected(order_id, RejectReason::DuplicateOrderId),
             );
             return;
         }
@@ -203,13 +188,7 @@ impl LimitOrderBookV0 {
         if qty == 0 {
             self.emit(events, EventKind::Filled { order_id });
         } else {
-            self.emit(
-                events,
-                EventKind::Cancelled {
-                    order_id,
-                    remaining_qty: qty,
-                },
-            );
+            self.emit(events, EventKind::cancelled(order_id, qty));
         }
     }
 
@@ -218,10 +197,7 @@ impl LimitOrderBookV0 {
             None => {
                 self.emit(
                     events,
-                    EventKind::Rejected {
-                        order_id: id,
-                        reason: RejectReason::UnknownOrder,
-                    },
+                    EventKind::rejected(id, RejectReason::UnknownOrder),
                 );
             }
             Some(order) => {
@@ -238,13 +214,7 @@ impl LimitOrderBookV0 {
                     }
                 };
 
-                self.emit(
-                    events,
-                    EventKind::Cancelled {
-                        order_id: id,
-                        remaining_qty: order.remaining_qty,
-                    },
-                );
+                self.emit(events, EventKind::cancelled(id, order.remaining_qty));
             }
         }
     }

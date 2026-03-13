@@ -64,6 +64,19 @@ pub enum EventKind {
     },
 }
 
+impl EventKind {
+    pub fn rejected(order_id: OrderId, reason: RejectReason) -> Self {
+        EventKind::Rejected { order_id, reason }
+    }
+
+    pub fn cancelled(order_id: OrderId, remaining_qty: Qty) -> Self {
+        EventKind::Cancelled {
+            order_id,
+            remaining_qty,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RejectReason {
     DuplicateOrderId,
