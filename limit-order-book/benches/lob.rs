@@ -41,17 +41,14 @@ fn fill_crowded_sell(book: &mut impl LimitOrderBook) {
     }
 }
 
-fn run_benchmarks<B: LimitOrderBook>(
-    runner: &mut BenchRunner,
-    new_book: impl Fn((u64, u64), u64) -> B,
-) {
+fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
     let prefilled_book = |price_range, order_capacity| {
-        let mut b = new_book(price_range, order_capacity);
+        let mut b = B::with_config(price_range, order_capacity);
         fill_book(&mut b);
         b
     };
     let crowded_sell_level = |price_range, order_capacity| {
-        let mut b = new_book(price_range, order_capacity);
+        let mut b = B::with_config(price_range, order_capacity);
         fill_crowded_sell(&mut b);
         b
     };
@@ -256,10 +253,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .param("lob_version", version);
 
     match version.as_str() {
-        "v0" => run_benchmarks(&mut runner, |_price_range, _order_capacity| {
-            LimitOrderBookV0::new()
-        }),
-        "v1" => run_benchmarks(&mut runner, LimitOrderBookV1::new),
+        "v0" => run_benchmarks::<LimitOrderBookV0>(&mut runner),
+        "v1" => run_benchmarks::<LimitOrderBookV1>(&mut runner),
         _ => return Err(format!("unknown LOB version: {version}; expected v0 or v1").into()),
     }
 

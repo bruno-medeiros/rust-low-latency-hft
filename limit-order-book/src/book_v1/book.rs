@@ -434,6 +434,10 @@ impl LimitOrderBookV1 {
 }
 
 impl LimitOrderBook for LimitOrderBookV1 {
+    fn with_config(price_range: (Price, Price), order_capacity: OrderId) -> Self {
+        Self::new(price_range, order_capacity)
+    }
+
     fn best_bid(&self) -> Option<(Price, Qty)> {
         LimitOrderBookV1::best_bid(self)
     }
