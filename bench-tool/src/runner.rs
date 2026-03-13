@@ -90,6 +90,22 @@ impl BenchRunner {
         self
     }
 
+    pub fn apply_core_pinning(&mut self) {
+        if let Some(core) = self.pin_core {
+            let core_id = CoreId { id: core };
+            if !core_affinity::set_for_current(core_id) {
+                let reason = match core_affinity::get_core_ids() {
+                    Some(cores) => {
+                        format!("core {core} not available (available: 0..{})", cores.len())
+                    }
+                    None => "core affinity not supported on this platform".to_string(),
+                };
+                eprintln!("\n  warning: CPU pinning failed — {reason}; continuing without pinning");
+                self.pin_core = None;
+            }
+        }
+    }
+
     pub fn warmup_iters(mut self, n: u64) -> Self {
         self.warmup_iters = n;
         self
@@ -111,9 +127,64 @@ impl BenchRunner {
     }
 
     /// Run a scenario. `iters` is the number of iterations for both latency and throughput modes.
-    /// - `Latency`: setup before each op, measure per-op latency distribution.
-    /// - `Throughput`: single state, run `iters` ops in a tight loop, report sustained ops/sec.
-    pub fn run<State, S, F>(&mut self, mode: RunMode, name: &str, setup: S, mut op: F, iters: u64)
+    pub fn run_latency<State, S, F>(&mut self, name: &str, setup: S, mut op: F, iters: u64)
+    where
+        S: Fn() -> State,
+        F: FnMut(&mut State),
+    {
+        if let Some(f) = &self.filter
+            && !name.to_lowercase().contains(&f.to_lowercase())
+        {
+            return;
+        }
+
+        eprint!("  {name} ... ");
+
+        for _ in 0..self.warmup_iters {
+            let mut state = setup();
+            #[allow(clippy::unit_arg)]
+            black_box(op(&mut state));
+        }
+
+        let mut hist =
+            Histogram::<u64>::new_with_bounds(1, 1_000_000_000, 3).expect("histogram creation");
+
+        let allocator = GLOBAL;
+        let mut total_allocs = 0u64;
+        let mut total_deallocs = 0u64;
+        let mut total_bytes = 0u64;
+
+        for _ in 0..iters {
+            let mut state = setup();
+
+            let region = Region::new(allocator);
+
+            let start = self.clock.raw();
+            #[allow(clippy::unit_arg)]
+            black_box(op(&mut state));
+            let end = self.clock.raw();
+            let elapsed_ns = self.clock.delta_as_nanos(start, end);
+
+            let stats = region.change();
+
+            hist.record(elapsed_ns.max(1)).expect("histogram record");
+
+            total_allocs += stats.allocations as u64 + stats.reallocations as u64;
+            total_deallocs += stats.deallocations as u64;
+            total_bytes += stats.bytes_allocated as u64;
+        }
+
+        self.results.push(ScenarioResult::Latency(LatencyScenario {
+            name: name.to_string(),
+            samples: iters,
+            latency: histogram_to_latency_stats(&hist),
+            allocations: build_alloc_stats(total_allocs, total_deallocs, total_bytes, iters),
+        }));
+
+        eprintln!("done");
+    }
+
+    pub fn run_throughput<State, S, F>(&mut self, name: &str, setup: S, mut op: F, iters: u64)
     where
         S: Fn() -> State,
         F: FnMut(&mut State),
@@ -125,103 +196,34 @@ impl BenchRunner {
         }
 
         let allocator = GLOBAL;
-        if let Some(core) = self.pin_core {
-            let core_id = CoreId { id: core };
-            if !core_affinity::set_for_current(core_id) {
-                let reason = match core_affinity::get_core_ids() {
-                    Some(cores) => {
-                        format!("core {core} not available (available: 0..{})", cores.len())
-                    }
-                    None => "core affinity not supported on this platform".to_string(),
-                };
-                eprintln!("\n  warning: CPU pinning failed — {reason}; continuing without pinning");
-                self.pin_core = None;
-            }
-        }
-
         eprint!("  {name} ... ");
 
-        for _ in 0..self.warmup_iters {
-            let mut state = setup();
+        let region = Region::new(allocator);
+
+        let mut state = setup();
+
+        let start = self.clock.raw();
+        for _ in 0..iters {
             #[allow(clippy::unit_arg)]
             black_box(op(&mut state));
         }
+        let end = self.clock.raw();
+        let total_ns = self.clock.delta_as_nanos(start, end);
+        let stats = region.change();
 
-        match mode {
-            RunMode::Latency => {
-                let mut hist = Histogram::<u64>::new_with_bounds(1, 1_000_000_000, 3)
-                    .expect("histogram creation");
+        let total_allocs = stats.allocations as u64 + stats.reallocations as u64;
+        let total_deallocs = stats.deallocations as u64;
+        let total_bytes = stats.bytes_allocated as u64;
+        let mean_ns = total_ns as f64 / iters as f64;
+        let throughput_ops_per_sec = 1_000_000_000.0 / mean_ns;
 
-                let mut total_allocs = 0u64;
-                let mut total_deallocs = 0u64;
-                let mut total_bytes = 0u64;
-
-                for _ in 0..iters {
-                    let mut state = setup();
-
-                    let region = Region::new(allocator);
-
-                    let start = self.clock.raw();
-                    #[allow(clippy::unit_arg)]
-                    black_box(op(&mut state));
-                    let end = self.clock.raw();
-                    let elapsed_ns = self.clock.delta_as_nanos(start, end);
-
-                    let stats = region.change();
-
-                    hist.record(elapsed_ns.max(1)).expect("histogram record");
-
-                    total_allocs += stats.allocations as u64 + stats.reallocations as u64;
-                    total_deallocs += stats.deallocations as u64;
-                    total_bytes += stats.bytes_allocated as u64;
-                }
-
-                self.results.push(ScenarioResult::Latency(LatencyScenario {
-                    name: name.to_string(),
-                    samples: iters,
-                    latency: histogram_to_latency_stats(&hist),
-                    allocations: build_alloc_stats(
-                        total_allocs,
-                        total_deallocs,
-                        total_bytes,
-                        iters,
-                    ),
-                }));
-            }
-            RunMode::Throughput => {
-                let region = Region::new(allocator);
-
-                let mut state = setup();
-
-                let start = self.clock.raw();
-                for _ in 0..iters {
-                    #[allow(clippy::unit_arg)]
-                    black_box(op(&mut state));
-                }
-                let end = self.clock.raw();
-                let total_ns = self.clock.delta_as_nanos(start, end);
-                let stats = region.change();
-
-                let total_allocs = stats.allocations as u64 + stats.reallocations as u64;
-                let total_deallocs = stats.deallocations as u64;
-                let total_bytes = stats.bytes_allocated as u64;
-                let mean_ns = total_ns as f64 / iters as f64;
-                let throughput_ops_per_sec = 1_000_000_000.0 / mean_ns;
-
-                self.results
-                    .push(ScenarioResult::Throughput(ThroughputScenario {
-                        name: name.to_string(),
-                        samples: iters,
-                        throughput_ops_per_sec,
-                        allocations: build_alloc_stats(
-                            total_allocs,
-                            total_deallocs,
-                            total_bytes,
-                            iters,
-                        ),
-                    }));
-            }
-        }
+        self.results
+            .push(ScenarioResult::Throughput(ThroughputScenario {
+                name: name.to_string(),
+                samples: iters,
+                throughput_ops_per_sec,
+                allocations: build_alloc_stats(total_allocs, total_deallocs, total_bytes, iters),
+            }));
 
         eprintln!("done");
     }
