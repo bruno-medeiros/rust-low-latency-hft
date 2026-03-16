@@ -192,20 +192,19 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
         sink: CountingEventSink,
-        cycle: usize,
+        op_id_counter: usize,
     }
-    runner.run_throughput(
+    let state = runner.run_throughput(
         "Throughput (sustained mix)",
         || ThroughputState {
             book: prefilled_book(PRICE_RANGE, 101_000_000),
             sink: CountingEventSink::default(),
-            cycle: 0,
+            op_id_counter: 1,
         },
         |state, op_count| {
-            let base = OP_ORDER_ID_BASE as usize + state.cycle * 10;
             for i in 0..4 {
                 state.book.add_limit_order(
-                    (base + i) as u64,
+                    (state.op_id_counter + i) as u64,
                     Side::Buy,
                     5_000 + i as u64,
                     50,
@@ -213,15 +212,18 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
                 );
             }
             for i in 0..4 {
-                state.book.cancel_order((base + i) as u64, &mut state.sink);
+                state
+                    .book
+                    .cancel_order((state.op_id_counter + i) as u64, &mut state.sink);
             }
+            state.op_id_counter += 4;
             *op_count += 8;
             black_box(state.book.spread());
             black_box(state.book.spread());
-            state.cycle += 1;
         },
-        10_000_000,
+        20_000_000,
     );
+    eprintln!("Total orders: {}", state.op_id_counter);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

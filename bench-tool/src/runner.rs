@@ -178,7 +178,13 @@ impl BenchRunner {
         eprintln!("done");
     }
 
-    pub fn run_throughput<State, S, F>(&mut self, name: &str, setup: S, mut op: F, iters: u64)
+    pub fn run_throughput<State, S, F>(
+        &mut self,
+        name: &str,
+        setup: S,
+        mut op: F,
+        iters: u64,
+    ) -> State
     where
         S: Fn() -> State,
         F: FnMut(&mut State, &mut u32),
@@ -186,7 +192,7 @@ impl BenchRunner {
         if let Some(f) = &self.filter
             && !name.to_lowercase().contains(&f.to_lowercase())
         {
-            return;
+            return setup();
         }
 
         let allocator = GLOBAL;
@@ -228,6 +234,8 @@ impl BenchRunner {
             }));
 
         eprintln!("done");
+
+        state
     }
 
     pub fn finish(self) -> BenchReport {
