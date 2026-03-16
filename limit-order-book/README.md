@@ -55,7 +55,7 @@ alongside results for reproducibility.
 | **Depth (top 5)**                       | Top-N levels query; returns aggregate quantity per level                        |
 | **Order lookup (hit)**                  | Lookup resting order by ID                                                      |
 | **Realistic mix (per-op)**              | 40% passive add / 30% cancel / 20% match / 10% BBO; per-op latency distribution |
-| **Throughput (sustained mix)**          | Same mix on a single book in a tight loop; sustained ops/sec                    |
+| **Throughput (sustained mix)**          | Realistic mix (passive add, aggressive multi-fill, cancel, spread) on a single book; steady state; |
 
 ```bash
 # Save report as JSON (for future baseline comparison) and Markdown

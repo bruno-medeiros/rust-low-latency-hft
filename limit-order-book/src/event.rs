@@ -1,4 +1,5 @@
 use crate::types::{OrderId, Price, Qty};
+use serde::{Deserialize, Serialize};
 
 /// Sink for order book events. Implementations receive events from [`crate::LimitOrderBook`] commands.
 pub trait EventSink {
@@ -13,7 +14,7 @@ impl EventSink for Vec<Event> {
 
 /// Event sink that counts events per [`EventKind`] variant. Useful for benchmarks or when only
 /// aggregate counts are needed.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CountingEventSink {
     pub accepted: u64,
     pub rejected: u64,

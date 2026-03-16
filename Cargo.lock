@@ -102,6 +102,7 @@ dependencies = [
  "clap",
  "core_affinity",
  "hdrhistogram",
+ "limit-order-book",
  "quanta",
  "serde",
  "serde_json",
@@ -472,6 +473,7 @@ version = "0.1.0"
 dependencies = [
  "bench-tool",
  "criterion",
+ "serde",
 ]
 
 [[package]]
