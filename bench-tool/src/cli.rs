@@ -21,6 +21,11 @@ pub struct CliArgs {
     #[arg(long)]
     pub save_md: Option<PathBuf>,
 
+    /// In Markdown output, add an image link after ### Throughput (path from separate command).
+    /// Omit PATH to use "flamegraph.svg".
+    #[arg(long, value_name = "PATH", num_args = 0..=1, default_missing_value = "flamegraph.svg")]
+    pub flamegraph: Option<String>,
+
     /// Run only scenarios whose name contains this string (case-insensitive)
     #[arg(long)]
     pub filter: Option<String>,
@@ -67,9 +72,13 @@ impl CliArgs {
         }
 
         if let Some(path) = &self.save_md {
-            let mut md = report.render(&MarkdownRenderer);
+            let renderer = match &self.flamegraph {
+                None => MarkdownRenderer::new(),
+                Some(p) => MarkdownRenderer::with_flamegraph(p.clone()),
+            };
+            let mut md = report.render(&renderer);
             if let Some(cmp) = &comparison {
-                md.push_str(&cmp.render(&MarkdownRenderer));
+                md.push_str(&cmp.render(&renderer));
             }
             std::fs::write(path, md)?;
             eprintln!("Markdown saved to {}", path.display());

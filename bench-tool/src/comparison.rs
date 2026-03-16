@@ -193,7 +193,7 @@ impl Comparison {
     }
 
     pub fn to_markdown(&self) -> String {
-        self.render(&MarkdownRenderer)
+        self.render(&MarkdownRenderer::new())
     }
 }
 
