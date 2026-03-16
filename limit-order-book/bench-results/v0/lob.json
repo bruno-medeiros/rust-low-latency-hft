@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Limit Order Book (v0) — Latency",
-    "timestamp": "2026-03-16T19:30:17Z",
+    "timestamp": "2026-03-16T22:49:00Z",
     "hardware": {
       "cpu_model": "Apple M4 Pro",
       "cpu_cores": 12,
@@ -37,9 +37,9 @@
         "p95_ns": 83,
         "p99_ns": 84,
         "p999_ns": 125,
-        "max_ns": 292,
-        "mean_ns": 35.496190000000006,
-        "stdev_ns": 21.069033805181952
+        "max_ns": 12671,
+        "mean_ns": 38.24621,
+        "stdev_ns": 48.16230217333781
       },
       "allocations": {
         "total_allocs": 100000,
@@ -55,15 +55,15 @@
       "name": "Add (sweep 5 levels, 50 fills)",
       "samples": 100000,
       "latency": {
-        "min_ns": 850,
-        "p50_ns": 1084,
+        "min_ns": 833,
+        "p50_ns": 1125,
         "p90_ns": 1209,
         "p95_ns": 1250,
-        "p99_ns": 1500,
-        "p999_ns": 5375,
-        "max_ns": 40415,
-        "mean_ns": 1113.51591,
-        "stdev_ns": 288.2568327843624
+        "p99_ns": 1375,
+        "p999_ns": 1584,
+        "max_ns": 30815,
+        "mean_ns": 1136.5772699999998,
+        "stdev_ns": 179.90036105952402
       },
       "allocations": {
         "total_allocs": 0,
@@ -79,15 +79,15 @@
       "name": "Market (sweep 10 levels, 100 fills)",
       "samples": 100000,
       "latency": {
-        "min_ns": 1810,
-        "p50_ns": 2209,
+        "min_ns": 1792,
+        "p50_ns": 2291,
         "p90_ns": 2417,
         "p95_ns": 2459,
-        "p99_ns": 2959,
-        "p999_ns": 7003,
-        "max_ns": 247423,
-        "mean_ns": 2237.300339999999,
-        "stdev_ns": 922.5491086093381
+        "p99_ns": 2791,
+        "p999_ns": 3227,
+        "max_ns": 24511,
+        "mean_ns": 2283.951099999999,
+        "stdev_ns": 232.63155213510916
       },
       "allocations": {
         "total_allocs": 0,
@@ -107,11 +107,11 @@
         "p50_ns": 42,
         "p90_ns": 42,
         "p95_ns": 42,
-        "p99_ns": 84,
-        "p999_ns": 458,
-        "max_ns": 10711,
-        "mean_ns": 34.11895000000001,
-        "stdev_ns": 65.39939419365824
+        "p99_ns": 42,
+        "p999_ns": 84,
+        "max_ns": 3167,
+        "mean_ns": 32.84144,
+        "stdev_ns": 21.386983862302788
       },
       "allocations": {
         "total_allocs": 0,
@@ -132,10 +132,10 @@
         "p90_ns": 208,
         "p95_ns": 209,
         "p99_ns": 209,
-        "p999_ns": 267,
-        "max_ns": 40287,
-        "mean_ns": 169.85662000000005,
-        "stdev_ns": 160.33338835743353
+        "p999_ns": 250,
+        "max_ns": 6211,
+        "mean_ns": 172.74535999999998,
+        "stdev_ns": 33.32934740540834
       },
       "allocations": {
         "total_allocs": 0,
@@ -154,12 +154,12 @@
         "min_ns": 1,
         "p50_ns": 1,
         "p90_ns": 1,
-        "p95_ns": 41,
+        "p95_ns": 1,
         "p99_ns": 42,
         "p999_ns": 42,
-        "max_ns": 167,
-        "mean_ns": 3.20646,
-        "stdev_ns": 9.291918761396916
+        "max_ns": 292,
+        "mean_ns": 2.5355300000000005,
+        "stdev_ns": 7.847087206033842
       },
       "allocations": {
         "total_allocs": 0,
@@ -176,14 +176,14 @@
       "samples": 100000,
       "latency": {
         "min_ns": 1,
-        "p50_ns": 42,
+        "p50_ns": 41,
         "p90_ns": 42,
         "p95_ns": 42,
-        "p99_ns": 84,
-        "p999_ns": 417,
-        "max_ns": 9240575,
-        "mean_ns": 136.83819,
-        "stdev_ns": 29262.917012326838
+        "p99_ns": 42,
+        "p999_ns": 84,
+        "max_ns": 458,
+        "mean_ns": 30.43994,
+        "stdev_ns": 19.05493250568997
       },
       "allocations": {
         "total_allocs": 100000,
@@ -204,10 +204,10 @@
         "p90_ns": 1,
         "p95_ns": 42,
         "p99_ns": 42,
-        "p999_ns": 84,
-        "max_ns": 4419,
-        "mean_ns": 5.018959999999999,
-        "stdev_ns": 18.88624792060085
+        "p999_ns": 42,
+        "max_ns": 333,
+        "mean_ns": 4.945869999999999,
+        "stdev_ns": 12.345675353867849
       },
       "allocations": {
         "total_allocs": 0,
@@ -227,11 +227,11 @@
         "p50_ns": 42,
         "p90_ns": 83,
         "p95_ns": 84,
-        "p99_ns": 125,
-        "p999_ns": 333,
-        "max_ns": 15167,
-        "mean_ns": 45.34559000000001,
-        "stdev_ns": 67.43339882841366
+        "p99_ns": 84,
+        "p999_ns": 125,
+        "max_ns": 3375,
+        "mean_ns": 42.248819999999995,
+        "stdev_ns": 31.629846167940812
       },
       "allocations": {
         "total_allocs": 40000,
@@ -245,18 +245,25 @@
     {
       "type": "throughput",
       "name": "Throughput (sustained mix)",
-      "samples": 10000000,
-      "throughput_ops_per_sec": 20644563.445075728,
+      "samples": 2000000,
+      "throughput_ops_per_sec": 21772709.490658533,
       "allocations": {
-        "total_allocs": 50000646,
-        "total_deallocs": 50000011,
-        "total_bytes": 6720466952,
-        "avg_allocs_per_op": 5.0000646,
-        "avg_deallocs_per_op": 5.0000011,
-        "avg_bytes_per_op": 672.0466952
+        "total_allocs": 76000648,
+        "total_deallocs": 70000011,
+        "total_bytes": 6784468040,
+        "avg_allocs_per_op": 38.000324,
+        "avg_deallocs_per_op": 35.0000055,
+        "avg_bytes_per_op": 3392.23402
       },
       "setup_allocs": 645,
-      "setup_bytes": 511476
+      "setup_bytes": 511476,
+      "event_counts": {
+        "accepted": 116000000,
+        "rejected": 0,
+        "fill": 32000000,
+        "filled": 40000000,
+        "cancelled": 76000000
+      }
     }
   ]
 }

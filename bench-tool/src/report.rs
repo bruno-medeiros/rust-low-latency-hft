@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use limit_order_book::CountingEventSink;
 use serde::{Deserialize, Serialize};
 
 use chrono::Utc;
@@ -57,6 +58,8 @@ pub struct ThroughputScenario {
     /// Total bytes allocated during setup phase.
     #[serde(default)]
     pub setup_bytes: u64,
+    /// Event counts from the run (counting event sink).
+    pub event_counts: CountingEventSink,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -264,6 +267,25 @@ impl BenchReport {
                     fmt_bytes_f64(t.setup_bytes as f64),
                 ];
                 renderer.render_table_row(&mut out, throughput_headers, &cells);
+            }
+            for t in &throughput {
+                let ec = &t.event_counts;
+                let event_headers = &["Event type", "Count"];
+                renderer.render_heading(&mut out, 4, &format!("{} — event counts", t.name));
+                renderer.render_table_start(&mut out, event_headers);
+                for (label, count) in [
+                    ("Accepted", ec.accepted),
+                    ("Rejected", ec.rejected),
+                    ("Fill", ec.fill),
+                    ("Filled", ec.filled),
+                    ("Cancelled", ec.cancelled),
+                ] {
+                    renderer.render_table_row(
+                        &mut out,
+                        event_headers,
+                        &[label.to_string(), count.to_string()],
+                    );
+                }
             }
             renderer.render_heading(&mut out, 4, "Throughput flamegraph");
             renderer.render_throughput_extra(&mut out);

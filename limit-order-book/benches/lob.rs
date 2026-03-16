@@ -186,44 +186,93 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
     );
 
     // ── Throughput (sustained mix) ────────────────────────────────────────────
-    // 4 add + 4 cancel (paired) + 2 BBO per 10 ops.
-    // Uses a larger order_capacity to stress the V1 data structure more realistically.
-    // IDs are reused each cycle since all adds are cancelled within the same iteration.
+    // Realistic mix: passive adds (unfilled), aggressive adds (multiple fills), cancels, spread.
+    // Per cycle: 20 passive buy, 20 passive sell, 8 aggressive buy (hit our sells), 20 cancel buy,
+    // 8 cancel sell (remaining after match), 12 spread. Steady state: aggressors hit our passive
+    // sells; new order IDs every cycle via op_id_counter.
+    const CANCEL_PER_CYCLE: u64 = 30;
+    const PASSIVE_PER_CYCLE: u64 = 20;
+    const AGGRESSIVE_PER_CYCLE: u64 = 8;
+    const SPREAD_PER_CYCLE: u64 = 12;
+    const RESTING_QTY: u64 = 100;
+    const AGGRESSIVE_QTY: u64 = 150; // > RESTING_QTY so each aggressor gets 2+ Fill events
+
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
-        sink: CountingEventSink,
-        op_id_counter: usize,
+        order_id_counter: u64,
     }
-    let state = runner.run_throughput(
+    let _state = runner.run_throughput(
         "Throughput (sustained mix)",
         || ThroughputState {
-            book: prefilled_book(PRICE_RANGE, 101_000_000),
-            sink: CountingEventSink::default(),
-            op_id_counter: 1,
+            book: prefilled_book(PRICE_RANGE, 150_000_000),
+            order_id_counter: OP_ORDER_ID_BASE,
         },
-        |state, op_count| {
-            for i in 0..4 {
+        |state, sink, op_count| {
+            let initial_order_count = state.book.order_count();
+            let base_orders_to_cancel = state.order_id_counter;
+            // Passive buy (rest at 5000..5019)
+            for i in 0..CANCEL_PER_CYCLE {
                 state.book.add_limit_order(
-                    (state.op_id_counter + i) as u64,
+                    state.order_id_counter + i,
                     Side::Buy,
-                    5_000 + i as u64,
-                    50,
-                    &mut state.sink,
+                    5_000 + i,
+                    RESTING_QTY,
+                    sink,
                 );
             }
-            for i in 0..4 {
-                state
-                    .book
-                    .cancel_order((state.op_id_counter + i) as u64, &mut state.sink);
+            state.order_id_counter += CANCEL_PER_CYCLE;
+            *op_count += CANCEL_PER_CYCLE;
+
+            // Passive sell at best ask so aggressors can hit them (steady state, no prefilled drain)
+            let base_passive = state.order_id_counter;
+            for i in 0..PASSIVE_PER_CYCLE {
+                state.book.add_limit_order(
+                    state.order_id_counter + i,
+                    Side::Sell,
+                    MID_PRICE,
+                    RESTING_QTY,
+                    sink,
+                );
             }
-            state.op_id_counter += 4;
-            *op_count += 8;
-            black_box(state.book.spread());
-            black_box(state.book.spread());
+            state.order_id_counter += PASSIVE_PER_CYCLE;
+            *op_count += PASSIVE_PER_CYCLE;
+
+            // Aggressive buy (multiple fills per order; hit our passive sells)
+            for i in 0..AGGRESSIVE_PER_CYCLE {
+                state.book.add_limit_order(
+                    state.order_id_counter + i,
+                    Side::Buy,
+                    MID_PRICE,
+                    AGGRESSIVE_QTY,
+                    sink,
+                );
+            }
+            state.order_id_counter += AGGRESSIVE_PER_CYCLE;
+            *op_count += AGGRESSIVE_PER_CYCLE;
+
+            // Run some spreads
+            for _ in 0..SPREAD_PER_CYCLE {
+                black_box(state.book.spread());
+            }
+            *op_count += SPREAD_PER_CYCLE;
+
+            // Cancel all passive buy we added this cycle
+            for i in 0..CANCEL_PER_CYCLE {
+                state.book.cancel_order(base_orders_to_cancel + i, sink);
+            }
+            *op_count += CANCEL_PER_CYCLE;
+
+            // Cancel the 8 passive sells that still have remaining qty (first 12 were fully filled by aggressors)
+            for i in 12..PASSIVE_PER_CYCLE {
+                state.book.cancel_order(base_passive + i, sink);
+            }
+            *op_count += PASSIVE_PER_CYCLE;
+
+            // Check steady order count.
+            assert!(state.book.order_count() == initial_order_count);
         },
-        20_000_000,
+        2_000_000,
     );
-    eprintln!("Total orders: {}", state.op_id_counter);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

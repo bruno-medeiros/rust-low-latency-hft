@@ -7,6 +7,8 @@ use hdrhistogram::Histogram;
 use quanta::Clock;
 use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
+use limit_order_book::CountingEventSink;
+
 use crate::report::{
     AllocStats, BenchReport, LatencyScenario, LatencyStats, ScenarioResult, ThroughputScenario,
 };
@@ -187,7 +189,7 @@ impl BenchRunner {
     ) -> State
     where
         S: Fn() -> State,
-        F: FnMut(&mut State, &mut u32),
+        F: FnMut(&mut State, &mut CountingEventSink, &mut u64),
     {
         if let Some(f) = &self.filter
             && !name.to_lowercase().contains(&f.to_lowercase())
@@ -199,6 +201,7 @@ impl BenchRunner {
 
         let region = Region::new(allocator);
         let mut state = setup();
+        let mut sink = CountingEventSink::default();
         let setup_stats = region.change();
         let setup_total_allocs = setup_stats.allocations as u64 + setup_stats.reallocations as u64;
         let setup_total_bytes = setup_stats.bytes_allocated as u64;
@@ -206,7 +209,7 @@ impl BenchRunner {
         let start = self.clock.raw();
         for _ in 0..iters {
             #[allow(clippy::unit_arg)]
-            black_box(op(&mut state, &mut op_count));
+            black_box(op(&mut state, &mut sink, &mut op_count));
         }
         let end = self.clock.raw();
         let total_ns = self.clock.delta_as_nanos(start, end);
@@ -231,6 +234,7 @@ impl BenchRunner {
                 allocations: build_alloc_stats(total_allocs, total_deallocs, total_bytes, iters),
                 setup_allocs: setup_total_allocs,
                 setup_bytes: setup_total_bytes,
+                event_counts: sink,
             }));
 
         eprintln!("done");

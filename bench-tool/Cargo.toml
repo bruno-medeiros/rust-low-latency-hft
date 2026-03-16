@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+limit-order-book = { path = "../limit-order-book" }
 core_affinity = "0.8"
 clap = { version = "4", features = ["derive"] }
 hdrhistogram = "7"
