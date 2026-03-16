@@ -190,11 +190,12 @@ impl BenchRunner {
         }
 
         let allocator = GLOBAL;
-        eprint!("  {name} ... ");
 
         let region = Region::new(allocator);
-
         let mut state = setup();
+        let setup_stats = region.change();
+        let setup_total_allocs = setup_stats.allocations as u64 + setup_stats.reallocations as u64;
+        let setup_total_bytes = setup_stats.bytes_allocated as u64;
         let mut op_count = 0;
         let start = self.clock.raw();
         for _ in 0..iters {
@@ -207,9 +208,14 @@ impl BenchRunner {
 
         let total_allocs = stats.allocations as u64 + stats.reallocations as u64;
         let total_deallocs = stats.deallocations as u64;
-        let total_bytes = stats.bytes_allocated as u64;
+        let total_bytes = stats.bytes_allocated as u64 - setup_total_bytes;
         let mean_ns = total_ns as f64 / op_count as f64;
         let throughput_ops_per_sec = 1_000_000_000.0 / mean_ns;
+
+        eprint!(
+            "  Total bytes: {} alloc: {} dealloc: {}",
+            total_bytes, total_allocs, total_deallocs
+        );
 
         self.results
             .push(ScenarioResult::Throughput(ThroughputScenario {
@@ -217,6 +223,8 @@ impl BenchRunner {
                 samples: iters,
                 throughput_ops_per_sec,
                 allocations: build_alloc_stats(total_allocs, total_deallocs, total_bytes, iters),
+                setup_allocs: setup_total_allocs,
+                setup_bytes: setup_total_bytes,
             }));
 
         eprintln!("done");
