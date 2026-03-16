@@ -51,6 +51,12 @@ pub struct ThroughputScenario {
     pub samples: u64,
     pub throughput_ops_per_sec: f64,
     pub allocations: AllocStats,
+    /// Total allocations (allocs + reallocs) during setup phase.
+    #[serde(default)]
+    pub setup_allocs: u64,
+    /// Total bytes allocated during setup phase.
+    #[serde(default)]
+    pub setup_bytes: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -242,6 +248,8 @@ impl BenchReport {
                 "allocs/op",
                 "deallocs/op",
                 "bytes/op",
+                "setup allocs",
+                "setup bytes",
             ];
             renderer.render_heading(&mut out, 3, "Throughput");
             renderer.render_table_start(&mut out, throughput_headers);
@@ -252,6 +260,8 @@ impl BenchReport {
                     format!("{:.1}", t.allocations.avg_allocs_per_op),
                     format!("{:.1}", t.allocations.avg_deallocs_per_op),
                     fmt_bytes_f64(t.allocations.avg_bytes_per_op),
+                    format!("{}", t.setup_allocs),
+                    fmt_bytes_f64(t.setup_bytes as f64),
                 ];
                 renderer.render_table_row(&mut out, throughput_headers, &cells);
             }

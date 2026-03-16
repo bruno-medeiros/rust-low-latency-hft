@@ -25,6 +25,8 @@ pub enum ScenarioComparison {
         name: String,
         throughput_ops_per_sec: MetricDelta,
         allocations: AllocComparison,
+        setup_allocs: MetricDelta,
+        setup_bytes: MetricDelta,
     },
 }
 
@@ -139,6 +141,8 @@ impl Comparison {
             "allocs/op",
             "deallocs/op",
             "bytes/op",
+            "setup allocs",
+            "setup bytes",
         ];
         let throughput_scenarios: Vec<_> = self
             .scenarios
@@ -148,7 +152,15 @@ impl Comparison {
                     name,
                     throughput_ops_per_sec,
                     allocations,
-                } => Some((name, throughput_ops_per_sec, allocations)),
+                    setup_allocs,
+                    setup_bytes,
+                } => Some((
+                    name,
+                    throughput_ops_per_sec,
+                    allocations,
+                    setup_allocs,
+                    setup_bytes,
+                )),
                 _ => None,
             })
             .collect();
@@ -156,13 +168,17 @@ impl Comparison {
         if !throughput_scenarios.is_empty() {
             renderer.render_heading(&mut out, 3, "Throughput");
             renderer.render_table_start(&mut out, throughput_headers);
-            for (name, throughput_ops_per_sec, allocations) in throughput_scenarios {
+            for (name, throughput_ops_per_sec, allocations, setup_allocs, setup_bytes) in
+                throughput_scenarios
+            {
                 let cells = vec![
                     name.clone(),
                     fmt_delta_ops_sec(throughput_ops_per_sec),
                     fmt_delta_count(&allocations.avg_allocs_per_op),
                     fmt_delta_count(&allocations.avg_deallocs_per_op),
                     fmt_delta_bytes(&allocations.avg_bytes_per_op),
+                    fmt_delta_count(setup_allocs),
+                    fmt_delta_bytes(setup_bytes),
                 ];
                 renderer.render_table_row(&mut out, throughput_headers, &cells);
             }
@@ -232,6 +248,8 @@ impl BenchReport {
                             t_b.throughput_ops_per_sec,
                         ),
                         allocations: alloc_cmp,
+                        setup_allocs: MetricDelta::from_u64(t_a.setup_allocs, t_b.setup_allocs),
+                        setup_bytes: MetricDelta::from_u64(t_a.setup_bytes, t_b.setup_bytes),
                     });
                 }
                 _ => {}
