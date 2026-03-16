@@ -7,6 +7,10 @@ pub trait Renderer {
     fn render_properties(&self, out: &mut String, props: &[(&str, String)]);
     fn render_table_start(&self, out: &mut String, headers: &[&str]);
     fn render_table_row(&self, out: &mut String, headers: &[&str], cells: &[String]);
+
+    /// Optional extra content after the "Throughput" section heading (e.g. image link).
+    /// Default is no-op.
+    fn render_throughput_extra(&self, _out: &mut String) {}
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -77,7 +81,25 @@ impl Renderer for TextRenderer {
 //  Markdown
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-pub struct MarkdownRenderer;
+#[derive(Default)]
+pub struct MarkdownRenderer {
+    /// If set, render a markdown image link after the ### Throughput heading.
+    pub flamegraph_path: Option<String>,
+}
+
+impl MarkdownRenderer {
+    /// Renderer without flamegraph link.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Renderer that adds `![Flame graph](path)` after the ### Throughput section.
+    pub fn with_flamegraph(path: impl Into<String>) -> Self {
+        Self {
+            flamegraph_path: Some(path.into()),
+        }
+    }
+}
 
 impl Renderer for MarkdownRenderer {
     fn render_heading(&self, out: &mut String, level: u8, title: &str) {
@@ -116,5 +138,11 @@ impl Renderer for MarkdownRenderer {
             out.push_str(&format!(" {} |", cell));
         }
         out.push('\n');
+    }
+
+    fn render_throughput_extra(&self, out: &mut String) {
+        if let Some(ref path) = self.flamegraph_path {
+            out.push_str(&format!("![Flame graph]({path})\n\n"));
+        }
     }
 }

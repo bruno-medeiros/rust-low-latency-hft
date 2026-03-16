@@ -265,6 +265,8 @@ impl BenchReport {
                 ];
                 renderer.render_table_row(&mut out, throughput_headers, &cells);
             }
+            renderer.render_heading(&mut out, 4, "Throughput flamegraph");
+            renderer.render_throughput_extra(&mut out);
         }
 
         out.push('\n');

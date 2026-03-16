@@ -58,3 +58,17 @@ impl BookOrders {
         order_slot
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::mem::size_of;
+
+    #[test]
+    fn test_option_order_slot_size() {
+        println!(
+            "Size of Option<OrderSlot>: {}",
+            size_of::<Option<OrderSlot>>()
+        );
+    }
+}
