@@ -197,11 +197,11 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
     runner.run_throughput(
         "Throughput (sustained mix)",
         || ThroughputState {
-            book: prefilled_book(PRICE_RANGE, 100_000_000 + 1),
+            book: prefilled_book(PRICE_RANGE, 101_000_000),
             sink: CountingEventSink::default(),
             cycle: 0,
         },
-        |state| {
+        |state, op_count| {
             let base = OP_ORDER_ID_BASE as usize + state.cycle * 10;
             for i in 0..4 {
                 state.book.add_limit_order(
@@ -215,6 +215,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
             for i in 0..4 {
                 state.book.cancel_order((base + i) as u64, &mut state.sink);
             }
+            *op_count += 8;
             black_box(state.book.spread());
             black_box(state.book.spread());
             state.cycle += 1;
