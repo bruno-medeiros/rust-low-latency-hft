@@ -7,8 +7,6 @@ use hdrhistogram::Histogram;
 use quanta::Clock;
 use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
-use chrono::Utc;
-
 use crate::report::{
     AllocStats, BenchReport, LatencyScenario, LatencyStats, ScenarioResult, ThroughputScenario,
 };
@@ -66,11 +64,7 @@ pub struct BenchRunner {
 
 impl BenchRunner {
     pub fn new(title: &str) -> Self {
-        let mut params = BTreeMap::new();
-        params.insert(
-            "bench_date".to_string(),
-            Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string(),
-        );
+        let params = BTreeMap::new();
         Self {
             title: title.to_string(),
             warmup_iters: 10_000,
@@ -187,7 +181,7 @@ impl BenchRunner {
     pub fn run_throughput<State, S, F>(&mut self, name: &str, setup: S, mut op: F, iters: u64)
     where
         S: Fn() -> State,
-        F: FnMut(&mut State),
+        F: FnMut(&mut State, &mut u32),
     {
         if let Some(f) = &self.filter
             && !name.to_lowercase().contains(&f.to_lowercase())
@@ -201,11 +195,11 @@ impl BenchRunner {
         let region = Region::new(allocator);
 
         let mut state = setup();
-
+        let mut op_count = 0;
         let start = self.clock.raw();
         for _ in 0..iters {
             #[allow(clippy::unit_arg)]
-            black_box(op(&mut state));
+            black_box(op(&mut state, &mut op_count));
         }
         let end = self.clock.raw();
         let total_ns = self.clock.delta_as_nanos(start, end);
@@ -214,7 +208,7 @@ impl BenchRunner {
         let total_allocs = stats.allocations as u64 + stats.reallocations as u64;
         let total_deallocs = stats.deallocations as u64;
         let total_bytes = stats.bytes_allocated as u64;
-        let mean_ns = total_ns as f64 / iters as f64;
+        let mean_ns = total_ns as f64 / op_count as f64;
         let throughput_ops_per_sec = 1_000_000_000.0 / mean_ns;
 
         self.results
