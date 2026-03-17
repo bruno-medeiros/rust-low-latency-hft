@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+slab = "0.4.12"
 
 [dev-dependencies]
 bench-tool = { path = "../bench-tool" }
