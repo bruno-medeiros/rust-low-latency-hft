@@ -204,7 +204,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
     let _state = runner.run_throughput(
         "Throughput (sustained mix)",
         || ThroughputState {
-            book: prefilled_book(PRICE_RANGE, 150_000_000),
+            book: prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
             order_id_counter: OP_ORDER_ID_BASE,
         },
         |state, sink, op_count| {

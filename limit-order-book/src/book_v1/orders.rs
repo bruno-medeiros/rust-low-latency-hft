@@ -1,59 +1,83 @@
+use std::collections::HashMap;
+
+use slab::Slab;
+
 use crate::book_v1::book::OrderSlot;
 use crate::order::Order;
-use crate::types::OrderId;
+use crate::types::{OrderId, OrderKey};
 
 #[derive(Debug)]
 pub struct BookOrders {
-    pub orders: Box<[Option<OrderSlot>]>,
-    pub order_count: u64,
+    slab: Slab<OrderSlot>,
+    id_to_key: HashMap<OrderId, OrderKey>,
 }
 
 impl BookOrders {
-    pub fn new(order_capacity: OrderId) -> BookOrders {
-        let orders = (0..order_capacity)
-            .map(|_| None)
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-
+    pub fn new(capacity: usize) -> BookOrders {
         Self {
-            orders,
-            order_count: 0,
+            slab: Slab::with_capacity(capacity),
+            id_to_key: HashMap::with_capacity(capacity),
         }
     }
 
     pub fn order(&self, id: OrderId) -> Option<&Order> {
-        self.orders[id as usize].as_ref().map(|os| &os.order)
+        self.id_to_key
+            .get(&id)
+            .map(|&key| &self.slab[key].order)
     }
 
     pub fn order_count(&self) -> u64 {
-        self.order_count
+        self.slab.len() as u64
     }
 
-    pub fn existing_order(&mut self, order_id: OrderId) -> &mut OrderSlot {
-        self.orders[order_id as usize]
-            .as_mut()
-            .unwrap_or_else(|| panic!("order {} exists", order_id))
+    pub fn slot(&self, key: OrderKey) -> &OrderSlot {
+        &self.slab[key]
     }
 
-    pub fn add_order(&mut self, order_id: OrderId, order: Order) -> &mut OrderSlot {
-        self.order_count += 1;
-        assert!(self.orders[order_id as usize].is_none());
-        self.orders[order_id as usize].insert(OrderSlot {
+    pub fn slot_mut(&mut self, key: OrderKey) -> &mut OrderSlot {
+        &mut self.slab[key]
+    }
+
+    /// Inserts an order into the slab and records the external-ID → slab-key mapping.
+    /// Returns the slab key for the newly inserted slot.
+    pub fn add_order(&mut self, order: Order) -> OrderKey {
+        let order_id = order.id;
+        let key = self.slab.insert(OrderSlot {
             next: None,
             prev: None,
             order,
-        })
+        });
+        self.id_to_key.insert(order_id, key);
+        key
     }
 
-    pub fn remove_order(&mut self, order_id: OrderId) -> OrderSlot {
-        let order_slot = self.orders[order_id as usize].take().unwrap();
+    /// Removes an order by external ID. Fixes up linked-list prev/next pointers.
+    pub fn remove_order(&mut self, order_id: OrderId) -> (OrderKey, OrderSlot) {
+        let key = self
+            .id_to_key
+            .remove(&order_id)
+            .unwrap_or_else(|| panic!("order {order_id} exists"));
+        // REVIEW this panic! above
+        (key, self.remove_slot(key))
+    }
 
-        self.order_count -= 1;
+    /// Removes an order by slab key. Fixes up linked-list prev/next pointers.
+    pub fn remove_by_key(&mut self, key: OrderKey) -> OrderSlot {
+        let order_id = self.slab[key].order.id;
+        self.id_to_key
+            .remove(&order_id)
+            .unwrap_or_else(|| panic!("order {order_id} exists"));
+        // REVIEW this panic! above
+        self.remove_slot(key)
+    }
+
+    fn remove_slot(&mut self, key: OrderKey) -> OrderSlot {
+        let order_slot = self.slab.remove(key);
         if let Some(prev) = order_slot.prev {
-            self.existing_order(prev).next = order_slot.next;
+            self.slab[prev].next = order_slot.next;
         }
         if let Some(next) = order_slot.next {
-            self.existing_order(next).prev = order_slot.prev;
+            self.slab[next].prev = order_slot.prev;
         }
         order_slot
     }
