@@ -14,8 +14,8 @@ fn is_power_of_two(capacity: usize) -> bool {
 }
 
 /// Shared state for the SPSC queue (buffer, head/tail indices).
-struct SpscInner<T: Default> {
-    buffer: Vec<UnsafeCell<T>>,
+struct SpscInner<T> {
+    buffer: Vec<UnsafeCell<Option<T>>>,
     /// `capacity - 1` for power-of-two ring indexing: `(idx + 1) & head_tail_mask`.
     head_tail_mask: u32,
     size: Arc<AtomicU32>,
@@ -23,29 +23,29 @@ struct SpscInner<T: Default> {
 
 // SAFETY: Slots are written only from the producer side and read only from the
 // consumer side ([`SpscProducer`] / [`SpscConsumer`]), at most one thread each.
-unsafe impl<T: Send + Default> Sync for SpscInner<T> {}
+unsafe impl<T: Send> Sync for SpscInner<T> {}
 
 /// SPSC queue.
-pub struct SpscQueue<T: Default> {
+pub struct SpscQueue<T> {
     inner: Arc<SpscInner<T>>,
 }
 
 /// Producer handle for an SPSC queue. Only one producer may exist per queue.
-pub struct SpscProducer<T: Default> {
+pub struct SpscProducer<T> {
     inner: Arc<SpscInner<T>>,
     tail: AtomicU32,
 }
 
 /// Consumer handle for an SPSC queue. Only one consumer may exist per queue.
-pub struct SpscConsumer<T: Default> {
+pub struct SpscConsumer<T> {
     inner: Arc<SpscInner<T>>,
     head: AtomicU32,
 }
 
-impl<T: Default> SpscQueue<T> {
+impl<T> SpscQueue<T> {
     /// Creates a new SPSC queue with the given capacity (fixed-size ring buffer).
     ///
-    /// `capacity` must be a power of two (e.g. 1, 2, 4, 8, …) and fit in `u32`.
+    /// `capacity` must be a power of two and fit in `u32`.
     pub fn new(capacity: usize) -> Result<Self, NonPowerOfTwoCapacity> {
         if !is_power_of_two(capacity) {
             return Err(NonPowerOfTwoCapacity { capacity });
@@ -54,9 +54,8 @@ impl<T: Default> SpscQueue<T> {
             return Err(NonPowerOfTwoCapacity { capacity });
         }
         let head_tail_mask = (capacity - 1) as u32;
-        let data: Vec<UnsafeCell<T>> = (0..capacity)
-            .map(|_| UnsafeCell::new(T::default()))
-            .collect();
+        let data: Vec<UnsafeCell<Option<T>>> =
+            (0..capacity).map(|_| UnsafeCell::new(None)).collect();
         Ok(Self {
             inner: Arc::new(SpscInner {
                 buffer: data,
@@ -86,7 +85,7 @@ impl<T: Default> SpscQueue<T> {
     }
 }
 
-impl<T: Default> SpscProducer<T> {
+impl<T> SpscProducer<T> {
     pub fn capacity(&self) -> usize {
         self.inner.buffer.len()
     }
@@ -96,16 +95,15 @@ impl<T: Default> SpscProducer<T> {
     }
 
     /// Tries to push without blocking. Returns `Ok(())` on success, `Err(value)` if full.
-    pub fn try_push(&mut self, mut value: T) -> Result<(), T> {
+    pub fn try_push(&mut self, value: T) -> Result<(), T> {
         if self.is_full() {
             return Err(value);
         }
         let tail = self.tail.load(Ordering::SeqCst);
 
         let cell = &self.inner.buffer[tail as usize];
-        let ptr = cell.get();
         unsafe {
-            ptr.swap(&mut value);
+            *cell.get() = Some(value);
         }
 
         self.inner.size.fetch_add(1, Ordering::SeqCst);
@@ -126,7 +124,7 @@ impl<T: Default> SpscProducer<T> {
     }
 }
 
-impl<T: Default> SpscConsumer<T> {
+impl<T> SpscConsumer<T> {
     pub fn capacity(&self) -> usize {
         self.inner.buffer.len()
     }
@@ -142,14 +140,12 @@ impl<T: Default> SpscConsumer<T> {
         }
         let head = self.head.load(Ordering::SeqCst);
 
-        // remove item from the buffer
-        let mut value = T::default();
-
         let cell = &self.inner.buffer[head as usize];
-        let ptr = cell.get();
-        unsafe {
-            ptr.swap(&mut value);
-        }
+        let value = unsafe {
+            (*cell.get())
+                .take()
+                .expect("pop: slot empty despite size > 0")
+        };
 
         self.inner.size.fetch_sub(1, Ordering::SeqCst);
         let new_head = head.wrapping_add(1) & self.inner.head_tail_mask;
