@@ -10,6 +10,21 @@ members = [
 edition = "2024"
 rust-version = "1.90.0"
 
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+slab = "0.4.12"
+bench-tool = { path = "bench-tool" }
+criterion = { version = "0.8.2", features = ["html_reports"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+limit-order-book = { path = "limit-order-book" }
+core_affinity = "0.8"
+clap = { version = "4", features = ["derive"] }
+hdrhistogram = "7"
+quanta = "0.12"
+serde_json = "1"
+stats_alloc = "0.1"
+sysinfo = { version = "0.38", default-features = false, features = ["system"] }
+
 [profile.release]
 opt-level = 3
 lto = "fat"
