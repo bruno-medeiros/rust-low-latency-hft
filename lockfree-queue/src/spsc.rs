@@ -21,6 +21,10 @@ struct SpscInner<T: Default> {
     size: Arc<AtomicU32>,
 }
 
+// SAFETY: Slots are written only from the producer side and read only from the
+// consumer side ([`SpscProducer`] / [`SpscConsumer`]), at most one thread each.
+unsafe impl<T: Send + Default> Sync for SpscInner<T> {}
+
 /// SPSC queue.
 pub struct SpscQueue<T: Default> {
     inner: Arc<SpscInner<T>>,
@@ -158,10 +162,10 @@ impl<T: Default> SpscConsumer<T> {
     }
 
     /// Pops a value from the queue. Blocks until an item is available.
-    pub fn pop_blocking(&mut self) -> Option<T> {
+    pub fn pop_blocking(&mut self) -> T {
         loop {
             if let Some(value) = self.try_pop() {
-                return Some(value);
+                return value;
             }
         }
     }
@@ -170,6 +174,7 @@ impl<T: Default> SpscConsumer<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
 
     fn split_i32(capacity: usize) -> (SpscProducer<i32>, SpscConsumer<i32>) {
         SpscQueue::new(capacity).unwrap().split()
@@ -356,12 +361,20 @@ mod tests {
     // --- blocking push/pop, is_empty / is_full ---
 
     #[test]
-    fn push_pop_blocking() {
+    fn push_pop_blocking_over_capacity_with_consumer_thread() {
         let (mut prod, mut cons) = split_i32(4);
-        prod.push_blocking(1);
-        prod.push_blocking(2);
-        assert_eq!(cons.pop_blocking(), Some(1));
-        assert_eq!(cons.pop_blocking(), Some(2));
+
+        let consumer = thread::spawn(move || {
+            for i in 1..=40 {
+                assert_eq!(cons.pop_blocking(), i);
+            }
+        });
+
+        for i in 1..=40 {
+            prod.push_blocking(i);
+        }
+
+        consumer.join().expect("consumer thread panicked");
     }
 
     // --- non-Copy / heap types ---
