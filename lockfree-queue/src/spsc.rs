@@ -83,11 +83,12 @@ impl<T: Default> SpscQueue<T> {
 }
 
 impl<T: Default> SpscProducer<T> {
-    /// Pushes a value into the queue. Blocks if full, until space is available.
-    pub fn push(&mut self, mut value: T) {
-        while let Err(err_value) = self.try_push(value) {
-            value = err_value;
-        }
+    pub fn capacity(&self) -> usize {
+        self.inner.buffer.len()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.inner.size.load(Ordering::SeqCst) as usize == self.capacity()
     }
 
     /// Tries to push without blocking. Returns `Ok(())` on success, `Err(value)` if full.
@@ -95,8 +96,6 @@ impl<T: Default> SpscProducer<T> {
         if self.is_full() {
             return Err(value);
         }
-        self.inner.size.fetch_add(1, Ordering::SeqCst);
-
         let tail = self.tail.load(Ordering::SeqCst);
 
         let cell = &self.inner.buffer[tail as usize];
@@ -105,6 +104,7 @@ impl<T: Default> SpscProducer<T> {
             ptr.swap(&mut value);
         }
 
+        self.inner.size.fetch_add(1, Ordering::SeqCst);
         let new_tail = tail.wrapping_add(1) & self.inner.head_tail_mask;
 
         self.tail
@@ -114,23 +114,21 @@ impl<T: Default> SpscProducer<T> {
         Ok(())
     }
 
-    pub fn capacity(&self) -> usize {
-        self.inner.buffer.len()
-    }
-
-    pub fn is_full(&self) -> bool {
-        self.inner.size.load(Ordering::SeqCst) as usize == self.capacity()
+    /// Pushes a value into the queue. Blocks if full, until space is available.
+    pub fn push_blocking(&mut self, mut value: T) {
+        while let Err(err_value) = self.try_push(value) {
+            value = err_value;
+        }
     }
 }
 
 impl<T: Default> SpscConsumer<T> {
-    /// Pops a value from the queue. Blocks until an item is available.
-    pub fn pop(&mut self) -> Option<T> {
-        loop {
-            if let Some(value) = self.try_pop() {
-                return Some(value);
-            }
-        }
+    pub fn capacity(&self) -> usize {
+        self.inner.buffer.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.size.load(Ordering::SeqCst) == 0
     }
 
     /// Tries to pop without blocking. Returns `Some(value)` or `None` if empty.
@@ -138,8 +136,6 @@ impl<T: Default> SpscConsumer<T> {
         if self.is_empty() {
             return None;
         }
-        self.inner.size.fetch_sub(1, Ordering::SeqCst);
-
         let head = self.head.load(Ordering::SeqCst);
 
         // remove item from the buffer
@@ -151,6 +147,7 @@ impl<T: Default> SpscConsumer<T> {
             ptr.swap(&mut value);
         }
 
+        self.inner.size.fetch_sub(1, Ordering::SeqCst);
         let new_head = head.wrapping_add(1) & self.inner.head_tail_mask;
 
         self.head
@@ -160,14 +157,13 @@ impl<T: Default> SpscConsumer<T> {
         Some(value)
     }
 
-    /// Returns the queue capacity.
-    pub fn capacity(&self) -> usize {
-        self.inner.buffer.len()
-    }
-
-    /// Returns true if the queue is empty.
-    pub fn is_empty(&self) -> bool {
-        self.inner.size.load(Ordering::SeqCst) == 0
+    /// Pops a value from the queue. Blocks until an item is available.
+    pub fn pop_blocking(&mut self) -> Option<T> {
+        loop {
+            if let Some(value) = self.try_pop() {
+                return Some(value);
+            }
+        }
     }
 }
 
@@ -362,10 +358,10 @@ mod tests {
     #[test]
     fn push_pop_blocking() {
         let (mut prod, mut cons) = split_i32(4);
-        prod.push(1);
-        prod.push(2);
-        assert_eq!(cons.pop(), Some(1));
-        assert_eq!(cons.pop(), Some(2));
+        prod.push_blocking(1);
+        prod.push_blocking(2);
+        assert_eq!(cons.pop_blocking(), Some(1));
+        assert_eq!(cons.pop_blocking(), Some(2));
     }
 
     // --- non-Copy / heap types ---
