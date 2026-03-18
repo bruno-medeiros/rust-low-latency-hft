@@ -2,9 +2,22 @@ use std::cell::UnsafeCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+/// Error returned when [`SpscQueue::new`] is called with a capacity that is not a power of two.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+#[error("SPSC queue capacity must be a power of two (got {capacity})")]
+pub struct NonPowerOfTwoCapacity {
+    pub capacity: usize,
+}
+
+fn is_power_of_two(capacity: usize) -> bool {
+    capacity > 0 && (capacity & (capacity - 1)) == 0
+}
+
 /// Shared state for the SPSC queue (buffer, head/tail indices).
 struct SpscInner<T: Default> {
     buffer: Vec<UnsafeCell<T>>,
+    /// `capacity - 1` for power-of-two ring indexing: `(idx + 1) & head_tail_mask`.
+    head_tail_mask: u32,
     size: Arc<AtomicU32>,
 }
 
@@ -27,21 +40,31 @@ pub struct SpscConsumer<T: Default> {
 
 impl<T: Default> SpscQueue<T> {
     /// Creates a new SPSC queue with the given capacity (fixed-size ring buffer).
-    pub fn new(capacity: usize) -> Self {
+    ///
+    /// `capacity` must be a power of two (e.g. 1, 2, 4, 8, …) and fit in `u32`.
+    pub fn new(capacity: usize) -> Result<Self, NonPowerOfTwoCapacity> {
+        if !is_power_of_two(capacity) {
+            return Err(NonPowerOfTwoCapacity { capacity });
+        }
+        if capacity > u32::MAX as usize {
+            return Err(NonPowerOfTwoCapacity { capacity });
+        }
+        let head_tail_mask = (capacity - 1) as u32;
         let data: Vec<UnsafeCell<T>> = (0..capacity)
             .map(|_| UnsafeCell::new(T::default()))
             .collect();
-        Self {
+        Ok(Self {
             inner: Arc::new(SpscInner {
                 buffer: data,
+                head_tail_mask,
                 size: Arc::new(AtomicU32::new(0)),
             }),
-        }
+        })
     }
 
     /// Returns the queue capacity.
     pub fn capacity(&self) -> usize {
-        self.inner.buffer.capacity()
+        self.inner.buffer.len()
     }
 
     /// Splits the queue into a single producer and single consumer handle.
@@ -82,7 +105,7 @@ impl<T: Default> SpscProducer<T> {
             ptr.swap(&mut value);
         }
 
-        let new_tail = (tail + 1) % self.capacity() as u32;
+        let new_tail = tail.wrapping_add(1) & self.inner.head_tail_mask;
 
         self.tail
             .compare_exchange(tail, new_tail, Ordering::SeqCst, Ordering::SeqCst)
@@ -92,7 +115,7 @@ impl<T: Default> SpscProducer<T> {
     }
 
     pub fn capacity(&self) -> usize {
-        self.inner.buffer.capacity()
+        self.inner.buffer.len()
     }
 
     pub fn is_full(&self) -> bool {
@@ -128,7 +151,7 @@ impl<T: Default> SpscConsumer<T> {
             ptr.swap(&mut value);
         }
 
-        let new_head = (head + 1) % self.capacity() as u32;
+        let new_head = head.wrapping_add(1) & self.inner.head_tail_mask;
 
         self.head
             .compare_exchange(head, new_head, Ordering::SeqCst, Ordering::SeqCst)
@@ -139,7 +162,7 @@ impl<T: Default> SpscConsumer<T> {
 
     /// Returns the queue capacity.
     pub fn capacity(&self) -> usize {
-        self.inner.buffer.capacity()
+        self.inner.buffer.len()
     }
 
     /// Returns true if the queue is empty.
@@ -153,14 +176,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn spsc_new_rejects_non_power_of_two() {
+        assert!(matches!(
+            SpscQueue::<i32>::new(0),
+            Err(NonPowerOfTwoCapacity { capacity: 0 })
+        ));
+        assert!(matches!(
+            SpscQueue::<i32>::new(3),
+            Err(NonPowerOfTwoCapacity { capacity: 3 })
+        ));
+        assert!(matches!(
+            SpscQueue::<i32>::new(15),
+            Err(NonPowerOfTwoCapacity { capacity: 15 })
+        ));
+    }
+
+    #[test]
     fn spsc_new_has_requested_capacity() {
-        let q = SpscQueue::<i32>::new(16);
+        let q = SpscQueue::<i32>::new(16).unwrap();
         assert_eq!(q.capacity(), 16);
     }
 
     #[test]
     fn spsc_split_returns_producer_and_consumer() {
-        let q = SpscQueue::<i32>::new(8);
+        let q = SpscQueue::<i32>::new(8).unwrap();
         let (prod, cons) = q.split();
         assert_eq!(prod.capacity(), 8);
         assert_eq!(cons.capacity(), 8);
@@ -170,7 +209,7 @@ mod tests {
 
     #[test]
     fn spsc_try_push_try_pop_roundtrip() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(4).split();
+        let (mut prod, mut cons) = SpscQueue::<i32>::new(4).unwrap().split();
         assert!(prod.try_push(1).is_ok());
         assert!(prod.try_push(2).is_ok());
         assert_eq!(cons.try_pop(), Some(1));
@@ -180,7 +219,7 @@ mod tests {
 
     #[test]
     fn spsc_try_push_full_returns_err() {
-        let (mut prod, _cons) = SpscQueue::<i32>::new(2).split();
+        let (mut prod, _cons) = SpscQueue::<i32>::new(2).unwrap().split();
         let _ = prod.try_push(10);
         let _ = prod.try_push(20);
         let res = prod.try_push(30);
@@ -192,20 +231,20 @@ mod tests {
 
     #[test]
     fn spsc_try_pop_empty_returns_none() {
-        let (mut _prod, mut cons) = SpscQueue::<i32>::new(4).split();
+        let (mut _prod, mut cons) = SpscQueue::<i32>::new(4).unwrap().split();
         assert_eq!(cons.try_pop(), None);
     }
 
     #[test]
     fn spsc_push_pop_roundtrip() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(4).split();
+        let (mut prod, mut cons) = SpscQueue::<i32>::new(4).unwrap().split();
         prod.push(42);
         assert_eq!(cons.pop(), Some(42));
     }
 
     #[test]
     fn spsc_ring_wraps_around() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(2).split();
+        let (mut prod, mut cons) = SpscQueue::<i32>::new(2).unwrap().split();
         let _ = prod.try_push(1);
         let _ = prod.try_push(2);
         assert_eq!(cons.try_pop(), Some(1));
@@ -217,7 +256,7 @@ mod tests {
 
     #[test]
     fn spsc_is_empty_and_is_full() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(2).split();
+        let (mut prod, mut cons) = SpscQueue::<i32>::new(2).unwrap().split();
         assert!(cons.is_empty());
         assert!(!prod.is_full());
         let _ = prod.try_push(1);
