@@ -21,9 +21,11 @@ impl BookOrders {
     }
 
     pub fn order(&self, id: OrderId) -> Option<&Order> {
-        self.id_to_key
-            .get(&id)
-            .map(|&key| &self.slab[key].order)
+        self.id_to_key.get(&id).map(|&key| &self.slab[key].order)
+    }
+
+    pub fn order_key(&self, id: OrderId) -> Option<OrderKey> {
+        self.id_to_key.get(&id).copied()
     }
 
     pub fn order_count(&self) -> u64 {
@@ -51,27 +53,16 @@ impl BookOrders {
         key
     }
 
-    /// Removes an order by external ID. Fixes up linked-list prev/next pointers.
-    pub fn remove_order(&mut self, order_id: OrderId) -> (OrderKey, OrderSlot) {
-        let key = self
-            .id_to_key
-            .remove(&order_id)
-            .unwrap_or_else(|| panic!("order {order_id} exists"));
-        // REVIEW this panic! above
-        (key, self.remove_slot(key))
-    }
-
     /// Removes an order by slab key. Fixes up linked-list prev/next pointers.
     pub fn remove_by_key(&mut self, key: OrderKey) -> OrderSlot {
         let order_id = self.slab[key].order.id;
         self.id_to_key
             .remove(&order_id)
             .unwrap_or_else(|| panic!("order {order_id} exists"));
-        // REVIEW this panic! above
-        self.remove_slot(key)
+        self.remove_slot_by_key(key)
     }
 
-    fn remove_slot(&mut self, key: OrderKey) -> OrderSlot {
+    fn remove_slot_by_key(&mut self, key: OrderKey) -> OrderSlot {
         let order_slot = self.slab.remove(key);
         if let Some(prev) = order_slot.prev {
             self.slab[prev].next = order_slot.next;

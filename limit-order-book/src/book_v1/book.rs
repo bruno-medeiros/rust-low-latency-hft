@@ -324,15 +324,15 @@ impl LimitOrderBookV1 {
     }
 
     pub fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink) {
-        match self.orders.order(order_id) {
+        match self.orders.order_key(order_id) {
             None => {
                 self.emit(
                     events,
                     EventKind::rejected(order_id, RejectReason::UnknownOrder),
                 );
             }
-            Some(_) => {
-                let order_slot = self.remove_order(order_id);
+            Some(order_key) => {
+                let order_slot = self.remove_order(order_key);
                 self.emit(
                     events,
                     EventKind::cancelled(order_id, order_slot.order.remaining_qty),
@@ -341,11 +341,11 @@ impl LimitOrderBookV1 {
         }
     }
 
-    fn remove_order(&mut self, order_id: OrderId) -> OrderSlot {
-        let (key, order_slot) = self.orders.remove_order(order_id);
+    fn remove_order(&mut self, order_key: OrderKey) -> OrderSlot {
+        let order_slot = self.orders.remove_by_key(order_key);
 
         let price_level = self.price_levels.existing_level(order_slot.order.price);
-        price_level.remove(key, &order_slot);
+        price_level.remove(order_key, &order_slot);
         let order = &order_slot.order;
         self.price_levels.remove_if_empty(order.price, order.side);
 
