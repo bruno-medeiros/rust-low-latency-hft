@@ -5,13 +5,13 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
-limit-order-book = { path = "../limit-order-book" }
-core_affinity = "0.8"
-clap = { version = "4", features = ["derive"] }
-hdrhistogram = "7"
-serde = { version = "1", features = ["derive"] }
-quanta = "0.12"
-serde_json = "1"
-stats_alloc = "0.1"
-sysinfo = { version = "0.38", default-features = false, features = ["system"] }
+chrono = { workspace = true }
+limit-order-book = { workspace = true }
+core_affinity = { workspace = true }
+clap = { workspace = true }
+hdrhistogram = { workspace = true }
+serde = { workspace = true }
+quanta = { workspace = true }
+serde_json = { workspace = true }
+stats_alloc = { workspace = true }
+sysinfo = { workspace = true }

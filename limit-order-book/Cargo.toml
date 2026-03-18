@@ -5,12 +5,12 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-slab = "0.4.12"
+serde = { workspace = true }
+slab = { workspace = true }
 
 [dev-dependencies]
-bench-tool = { path = "../bench-tool" }
-criterion = { version = "0.5", features = ["html_reports"] }
+bench-tool = { workspace = true }
+criterion = { workspace = true }
 
 [[bench]]
 name = "lob_criterion"
