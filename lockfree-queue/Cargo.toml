@@ -6,3 +6,4 @@ rust-version.workspace = true
 description = "Lock-free queues: SPSC (single-producer single-consumer) and MPSC (multi-producer single-consumer)"
 
 [dependencies]
+thiserror.workspace = true
