@@ -1,6 +1,7 @@
-use criterion::{BatchSize, BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use limit_order_book::types::Side;
 use limit_order_book::{CountingEventSink, LimitOrderBookV0};
+use std::hint::black_box;
 
 pub const ORDERS_PER_LEVEL: u64 = 10;
 const MID_PRICE: u64 = 10_000;
