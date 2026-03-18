@@ -175,95 +175,216 @@ impl<T: Default> SpscConsumer<T> {
 mod tests {
     use super::*;
 
+    fn split_i32(capacity: usize) -> (SpscProducer<i32>, SpscConsumer<i32>) {
+        SpscQueue::new(capacity).unwrap().split()
+    }
+
+    // --- constructor & capacity ---
+
     #[test]
-    fn spsc_new_rejects_non_power_of_two() {
+    fn new_rejects_zero() {
         assert!(matches!(
             SpscQueue::<i32>::new(0),
             Err(NonPowerOfTwoCapacity { capacity: 0 })
         ));
-        assert!(matches!(
-            SpscQueue::<i32>::new(3),
-            Err(NonPowerOfTwoCapacity { capacity: 3 })
-        ));
-        assert!(matches!(
-            SpscQueue::<i32>::new(15),
-            Err(NonPowerOfTwoCapacity { capacity: 15 })
-        ));
     }
 
     #[test]
-    fn spsc_new_has_requested_capacity() {
-        let q = SpscQueue::<i32>::new(16).unwrap();
-        assert_eq!(q.capacity(), 16);
-    }
-
-    #[test]
-    fn spsc_split_returns_producer_and_consumer() {
-        let q = SpscQueue::<i32>::new(8).unwrap();
-        let (prod, cons) = q.split();
-        assert_eq!(prod.capacity(), 8);
-        assert_eq!(cons.capacity(), 8);
-        assert!(cons.is_empty());
-        assert!(!prod.is_full());
-    }
-
-    #[test]
-    fn spsc_try_push_try_pop_roundtrip() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(4).unwrap().split();
-        assert!(prod.try_push(1).is_ok());
-        assert!(prod.try_push(2).is_ok());
-        assert_eq!(cons.try_pop(), Some(1));
-        assert_eq!(cons.try_pop(), Some(2));
-        assert_eq!(cons.try_pop(), None);
-    }
-
-    #[test]
-    fn spsc_try_push_full_returns_err() {
-        let (mut prod, _cons) = SpscQueue::<i32>::new(2).unwrap().split();
-        let _ = prod.try_push(10);
-        let _ = prod.try_push(20);
-        let res = prod.try_push(30);
-        assert!(res.is_err());
-        if let Err(v) = res {
-            assert_eq!(v, 30);
+    fn new_rejects_non_power_of_two() {
+        for &bad in &[3usize, 5, 6, 7, 9, 15, 17, 1023] {
+            assert!(
+                matches!(SpscQueue::<i32>::new(bad), Err(NonPowerOfTwoCapacity { capacity: c }) if c == bad),
+                "capacity {} should be rejected",
+                bad
+            );
         }
     }
 
     #[test]
-    fn spsc_try_pop_empty_returns_none() {
-        let (mut _prod, mut cons) = SpscQueue::<i32>::new(4).unwrap().split();
-        assert_eq!(cons.try_pop(), None);
+    fn new_accepts_powers_of_two_including_one() {
+        for &cap in &[1usize, 2, 4, 8, 16, 32, 256, 4096] {
+            let q = SpscQueue::<i32>::new(cap).unwrap();
+            assert_eq!(q.capacity(), cap, "capacity {}", cap);
+        }
     }
 
     #[test]
-    fn spsc_push_pop_roundtrip() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(4).unwrap().split();
-        prod.push(42);
-        assert_eq!(cons.pop(), Some(42));
-    }
-
-    #[test]
-    fn spsc_ring_wraps_around() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(2).unwrap().split();
-        let _ = prod.try_push(1);
-        let _ = prod.try_push(2);
-        assert_eq!(cons.try_pop(), Some(1));
-        let _ = prod.try_push(3);
-        assert_eq!(cons.try_pop(), Some(2));
-        assert_eq!(cons.try_pop(), Some(3));
-        assert_eq!(cons.try_pop(), None);
-    }
-
-    #[test]
-    fn spsc_is_empty_and_is_full() {
-        let (mut prod, mut cons) = SpscQueue::<i32>::new(2).unwrap().split();
+    fn split_exposes_same_capacity_and_initial_state() {
+        let q = SpscQueue::<i32>::new(64).unwrap();
+        assert_eq!(q.capacity(), 64);
+        let (prod, cons) = q.split();
+        assert_eq!(prod.capacity(), 64);
+        assert_eq!(cons.capacity(), 64);
         assert!(cons.is_empty());
         assert!(!prod.is_full());
-        let _ = prod.try_push(1);
-        assert!(!cons.is_empty());
-        let _ = prod.try_push(2);
-        assert!(prod.is_full());
-        let _ = cons.try_pop();
-        assert!(!prod.is_full());
+    }
+
+    // --- basic try_push / try_pop ---
+
+    #[test]
+    fn try_push_one_try_pop_one() {
+        let (mut prod, mut cons) = split_i32(8);
+        assert_eq!(prod.try_push(100), Ok(()));
+        assert_eq!(cons.try_pop(), Some(100));
+        assert_eq!(cons.try_pop(), None);
+    }
+
+    #[test]
+    fn try_pop_empty_queue_returns_none() {
+        let (mut _prod, mut cons) = split_i32(4);
+        assert_eq!(cons.try_pop(), None);
+        assert_eq!(cons.try_pop(), None);
+    }
+
+    #[test]
+    fn fifo_order_multiple_items() {
+        let (mut prod, mut cons) = split_i32(16);
+        for i in 0..10 {
+            assert_eq!(prod.try_push(i), Ok(()));
+        }
+        for i in 0..10 {
+            assert_eq!(cons.try_pop(), Some(i));
+        }
+        assert_eq!(cons.try_pop(), None);
+    }
+
+    #[test]
+    fn try_push_full_returns_err_and_preserves_value() {
+        let (mut prod, mut cons) = split_i32(4);
+        assert_eq!(prod.try_push(1), Ok(()));
+        assert_eq!(prod.try_push(2), Ok(()));
+        assert_eq!(prod.try_push(3), Ok(()));
+        assert_eq!(prod.try_push(4), Ok(()));
+        assert_eq!(prod.try_push(999), Err(999));
+        assert_eq!(cons.try_pop(), Some(1));
+        assert_eq!(prod.try_push(999), Ok(()));
+        assert_eq!(cons.try_pop(), Some(2));
+    }
+
+    #[test]
+    fn try_push_succeeds_after_partial_drain() {
+        let (mut prod, mut cons) = split_i32(2);
+        assert_eq!(prod.try_push(10), Ok(()));
+        assert_eq!(prod.try_push(20), Ok(()));
+        assert_eq!(prod.try_push(30), Err(30));
+        assert_eq!(cons.try_pop(), Some(10));
+        assert_eq!(prod.try_push(30), Ok(()));
+        assert_eq!(cons.try_pop(), Some(20));
+        assert_eq!(cons.try_pop(), Some(30));
+    }
+
+    // --- wraparound (index & slot reuse) ---
+
+    #[test]
+    fn wrap_single_slot_capacity_one() {
+        let (mut prod, mut cons) = split_i32(1);
+        assert_eq!(prod.try_push(1), Ok(()));
+        assert_eq!(prod.try_push(2), Err(2));
+        assert_eq!(cons.try_pop(), Some(1));
+        assert_eq!(prod.try_push(2), Ok(()));
+        assert_eq!(cons.try_pop(), Some(2));
+    }
+
+    #[test]
+    fn wrap_fill_drain_then_reuse_slots() {
+        let (mut prod, mut cons) = split_i32(2);
+        assert_eq!(prod.try_push(1), Ok(()));
+        assert_eq!(prod.try_push(2), Ok(()));
+        assert!(queue_is_full(&mut prod, &mut cons));
+        assert_eq!(cons.try_pop(), Some(1));
+        assert!(!prod.is_full() && !cons.is_empty());
+        assert_eq!(prod.try_push(3), Ok(()));
+        assert!(queue_is_full(&mut prod, &mut cons));
+        assert_eq!(cons.try_pop(), Some(2));
+        assert_eq!(cons.try_pop(), Some(3));
+        assert!(queue_is_empty(&mut prod, &mut cons));
+        assert_eq!(cons.try_pop(), None);
+    }
+
+    fn queue_is_empty(prod: &mut SpscProducer<i32>, cons: &mut SpscConsumer<i32>) -> bool {
+        !prod.is_full() && cons.is_empty()
+    }
+
+    fn queue_is_full(prod: &mut SpscProducer<i32>, cons: &mut SpscConsumer<i32>) -> bool {
+        prod.is_full() && !cons.is_empty()
+    }
+
+    #[test]
+    fn wrap_many_cycles_small_buffer() {
+        let (mut prod, mut cons) = split_i32(4);
+        for round in 0..200 {
+            for k in 0..4 {
+                assert_eq!(prod.try_push(round * 4 + k), Ok(()));
+            }
+            assert!(prod.is_full());
+            for k in 0..4 {
+                assert_eq!(cons.try_pop(), Some(round * 4 + k));
+            }
+            // Advance tail position
+            assert!(queue_is_empty(&mut prod, &mut cons));
+            assert_eq!(prod.try_push(123), Ok(()));
+            assert!(!prod.is_full() && !cons.is_empty());
+            assert_eq!(cons.try_pop(), Some(123));
+            assert!(queue_is_empty(&mut prod, &mut cons));
+        }
+    }
+
+    #[test]
+    fn wrap_interleaved_push_pop_advances_indices() {
+        let (mut prod, mut cons) = split_i32(8);
+        for i in 0..50 {
+            assert_eq!(prod.try_push(i), Ok(()));
+            assert_eq!(cons.try_pop(), Some(i));
+        }
+        assert_eq!(cons.try_pop(), None);
+    }
+
+    #[test]
+    fn wrap_staggered_producer_consumer() {
+        let (mut prod, mut cons) = split_i32(4);
+        assert_eq!(prod.try_push(0), Ok(()));
+        assert_eq!(prod.try_push(1), Ok(()));
+        assert_eq!(cons.try_pop(), Some(0));
+        assert_eq!(prod.try_push(2), Ok(()));
+        assert_eq!(prod.try_push(3), Ok(()));
+        assert_eq!(prod.try_push(4), Ok(()));
+        assert_eq!(prod.try_push(5), Err(5));
+        assert_eq!(cons.try_pop(), Some(1));
+        assert_eq!(prod.try_push(5), Ok(()));
+        assert_eq!(cons.try_pop(), Some(2));
+        assert_eq!(cons.try_pop(), Some(3));
+        assert_eq!(cons.try_pop(), Some(4));
+        assert_eq!(cons.try_pop(), Some(5));
+    }
+
+    // --- blocking push/pop, is_empty / is_full ---
+
+    #[test]
+    fn push_pop_blocking() {
+        let (mut prod, mut cons) = split_i32(4);
+        prod.push(1);
+        prod.push(2);
+        assert_eq!(cons.pop(), Some(1));
+        assert_eq!(cons.pop(), Some(2));
+    }
+
+    // --- non-Copy / heap types ---
+
+    #[test]
+    fn try_push_try_pop_string_roundtrip() {
+        let (mut prod, mut cons) = SpscQueue::<String>::new(4).unwrap().split();
+        assert_eq!(prod.try_push("hello".into()), Ok(()));
+        assert_eq!(cons.try_pop().as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn string_wrap_and_order() {
+        let (mut prod, mut cons) = SpscQueue::<String>::new(2).unwrap().split();
+        prod.try_push("a".into()).unwrap();
+        prod.try_push("b".into()).unwrap();
+        assert_eq!(cons.try_pop().as_deref(), Some("a"));
+        prod.try_push("c".into()).unwrap();
+        assert_eq!(cons.try_pop().as_deref(), Some("b"));
+        assert_eq!(cons.try_pop().as_deref(), Some("c"));
     }
 }
