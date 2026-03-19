@@ -62,8 +62,8 @@ fn decode_system_event(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
     if payload.len() < 2 + text_len {
         return Err(DecodeError::truncated(2 + text_len, payload.len()));
     }
-    let text = std::str::from_utf8(&payload[2..2 + text_len])
-        .map_err(|_| DecodeError::InvalidUtf8)?;
+    let text =
+        std::str::from_utf8(&payload[2..2 + text_len]).map_err(|_| DecodeError::InvalidUtf8)?;
     Ok(ItchMessage::SystemEvent { text })
 }
 
@@ -84,9 +84,9 @@ fn decode_add_order(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
     if payload.len() < 19 + sym_len {
         return Err(DecodeError::truncated(19 + sym_len, payload.len()));
     }
-    // REVIEW utf8 etc
-    let symbol = std::str::from_utf8(&payload[19..19 + sym_len])
-        .map_err(|_| DecodeError::InvalidUtf8)?;
+    // REVIEW: allocation here needed?
+    let symbol =
+        std::str::from_utf8(&payload[19..19 + sym_len]).map_err(|_| DecodeError::InvalidUtf8)?;
     Ok(ItchMessage::AddOrder {
         oid,
         side,
