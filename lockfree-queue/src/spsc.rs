@@ -1,6 +1,26 @@
 use std::cell::UnsafeCell;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+
+#[repr(align(64))]
+struct CacheLinePadded<T> {
+    value: T,
+}
+
+impl<T> CacheLinePadded<T> {
+    const fn new(value: T) -> Self {
+        Self { value }
+    }
+}
+
+impl Deref for CacheLinePadded<AtomicU32> {
+    type Target = AtomicU32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
 
 /// Error returned when [`SpscQueue::new`] is called with a capacity that is not a power of two.
 #[derive(Debug, Clone, Copy, thiserror::Error)]
@@ -18,8 +38,8 @@ struct SpscInner<T> {
     buffer: Vec<UnsafeCell<Option<T>>>,
     /// `capacity - 1` for power-of-two ring indexing: `(idx + 1) & head_tail_mask`.
     head_tail_mask: u32,
-    head: AtomicU32,
-    tail: AtomicU32,
+    tail: CacheLinePadded<AtomicU32>,
+    head: CacheLinePadded<AtomicU32>,
 }
 
 // SAFETY: Slots are written only from the producer side and read only from the
@@ -59,8 +79,8 @@ impl<T> SpscQueue<T> {
             inner: Arc::new(SpscInner {
                 buffer: data,
                 head_tail_mask,
-                head: AtomicU32::new(0),
-                tail: AtomicU32::new(0),
+                tail: CacheLinePadded::new(AtomicU32::new(0)),
+                head: CacheLinePadded::new(AtomicU32::new(0)),
             }),
         })
     }
