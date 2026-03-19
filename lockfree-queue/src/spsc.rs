@@ -22,21 +22,25 @@ impl Deref for CacheLinePadded<AtomicU32> {
     }
 }
 
-/// Error returned when [`SpscQueue::new`] is called with a capacity that is not a power of two.
-#[derive(Debug, Clone, Copy, thiserror::Error)]
-#[error("SPSC queue capacity must be a power of two (got {capacity})")]
-pub struct NonPowerOfTwoCapacity {
-    pub capacity: usize,
+/// Error returned when [`SpscQueue::new`] is called with an invalid `slot_count`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum InvalidSpscSlotCount {
+    #[error("SPSC queue slot count must be a power of two (got {slot_count})")]
+    NotPowerOfTwo { slot_count: usize },
+    #[error(
+        "SPSC queue slot count must be at least 2 (one ring slot is reserved; max elements are slot_count − 1; got {slot_count})"
+    )]
+    TooSmall { slot_count: usize },
 }
 
-fn is_power_of_two(capacity: usize) -> bool {
-    capacity > 0 && (capacity & (capacity - 1)) == 0
+fn is_power_of_two(slot_count: usize) -> bool {
+    slot_count > 0 && (slot_count & (slot_count - 1)) == 0
 }
 
 /// Shared state for the SPSC queue (buffer, head/tail indices).
 struct SpscInner<T> {
     buffer: Vec<UnsafeCell<Option<T>>>,
-    /// `capacity - 1` for power-of-two ring indexing: `(idx + 1) & head_tail_mask`.
+    /// `slot_count - 1` for power-of-two ring indexing: `(idx + 1) & head_tail_mask`.
     head_tail_mask: u32,
     tail: CacheLinePadded<AtomicU32>,
     head: CacheLinePadded<AtomicU32>,
@@ -62,19 +66,24 @@ pub struct SpscConsumer<T> {
 }
 
 impl<T> SpscQueue<T> {
-    /// Creates a new SPSC queue with the given capacity (fixed-size ring buffer).
+    /// Creates a new SPSC queue with the given ring size (fixed-size ring buffer).
     ///
-    /// `capacity` must be a power of two and fit in `u32`.
-    pub fn new(capacity: usize) -> Result<Self, NonPowerOfTwoCapacity> {
-        if !is_power_of_two(capacity) {
-            return Err(NonPowerOfTwoCapacity { capacity });
+    /// `slot_count` is the number of **slots** in the ring: it must be a **power of two**, **≥ 2**, and fit in `u32`.
+    /// One slot is **reserved** so head/tail can distinguish empty vs full, so the **effective maximum number of
+    /// elements** in the queue is **`slot_count − 1`**.
+    pub fn new(slot_count: usize) -> Result<Self, InvalidSpscSlotCount> {
+        if !is_power_of_two(slot_count) {
+            return Err(InvalidSpscSlotCount::NotPowerOfTwo { slot_count });
         }
-        if capacity > u32::MAX as usize {
-            return Err(NonPowerOfTwoCapacity { capacity });
+        if slot_count < 2 {
+            return Err(InvalidSpscSlotCount::TooSmall { slot_count });
         }
-        let head_tail_mask = (capacity - 1) as u32;
+        if slot_count > u32::MAX as usize {
+            return Err(InvalidSpscSlotCount::NotPowerOfTwo { slot_count });
+        }
+        let head_tail_mask = (slot_count - 1) as u32;
         let data: Vec<UnsafeCell<Option<T>>> =
-            (0..capacity).map(|_| UnsafeCell::new(None)).collect();
+            (0..slot_count).map(|_| UnsafeCell::new(None)).collect();
         Ok(Self {
             inner: Arc::new(SpscInner {
                 buffer: data,
@@ -85,8 +94,10 @@ impl<T> SpscQueue<T> {
         })
     }
 
-    /// Returns the queue capacity.
-    pub fn capacity(&self) -> usize {
+    /// Returns the number of slots in the ring buffer.
+    ///
+    /// At most **`slot_count() − 1`** elements may be queued at once (one slot is reserved).
+    pub fn slot_count(&self) -> usize {
         self.inner.buffer.len()
     }
 
@@ -104,7 +115,8 @@ impl<T> SpscQueue<T> {
 }
 
 impl<T> SpscProducer<T> {
-    pub fn capacity(&self) -> usize {
+    /// Number of ring slots; at most **`slot_count() − 1`** elements can be stored.
+    pub fn slot_count(&self) -> usize {
         self.inner.buffer.len()
     }
 
@@ -149,7 +161,8 @@ impl<T> SpscProducer<T> {
 }
 
 impl<T> SpscConsumer<T> {
-    pub fn capacity(&self) -> usize {
+    /// Number of ring slots; at most **`slot_count() − 1`** elements can be stored.
+    pub fn slot_count(&self) -> usize {
         self.inner.buffer.len()
     }
 
@@ -200,17 +213,25 @@ mod tests {
     use super::*;
     use std::thread;
 
-    fn split_i32(capacity: usize) -> (SpscProducer<i32>, SpscConsumer<i32>) {
-        SpscQueue::new(capacity).unwrap().split()
+    fn split_i32(slot_count: usize) -> (SpscProducer<i32>, SpscConsumer<i32>) {
+        SpscQueue::new(slot_count).unwrap().split()
     }
 
-    // --- constructor & capacity ---
+    // --- constructor & slot_count ---
 
     #[test]
     fn new_rejects_zero() {
         assert!(matches!(
             SpscQueue::<i32>::new(0),
-            Err(NonPowerOfTwoCapacity { capacity: 0 })
+            Err(InvalidSpscSlotCount::NotPowerOfTwo { slot_count: 0 })
+        ));
+    }
+
+    #[test]
+    fn new_rejects_one_reserved_slot_rule() {
+        assert!(matches!(
+            SpscQueue::<i32>::new(1),
+            Err(InvalidSpscSlotCount::TooSmall { slot_count: 1 })
         ));
     }
 
@@ -218,28 +239,28 @@ mod tests {
     fn new_rejects_non_power_of_two() {
         for &bad in &[3usize, 5, 6, 7, 9, 15, 17, 1023] {
             assert!(
-                matches!(SpscQueue::<i32>::new(bad), Err(NonPowerOfTwoCapacity { capacity: c }) if c == bad),
-                "capacity {} should be rejected",
+                matches!(SpscQueue::<i32>::new(bad), Err(InvalidSpscSlotCount::NotPowerOfTwo { slot_count: c }) if c == bad),
+                "slot_count {} should be rejected",
                 bad
             );
         }
     }
 
     #[test]
-    fn new_accepts_powers_of_two_including_one() {
-        for &cap in &[1usize, 2, 4, 8, 16, 32, 256, 4096] {
-            let q = SpscQueue::<i32>::new(cap).unwrap();
-            assert_eq!(q.capacity(), cap, "capacity {}", cap);
+    fn new_accepts_powers_of_two_at_least_two() {
+        for &slots in &[2usize, 4, 8, 16, 32, 256, 4096] {
+            let q = SpscQueue::<i32>::new(slots).unwrap();
+            assert_eq!(q.slot_count(), slots, "slot_count {}", slots);
         }
     }
 
     #[test]
-    fn split_exposes_same_capacity_and_initial_state() {
+    fn split_exposes_same_slot_count_and_initial_state() {
         let q = SpscQueue::<i32>::new(64).unwrap();
-        assert_eq!(q.capacity(), 64);
+        assert_eq!(q.slot_count(), 64);
         let (prod, cons) = q.split();
-        assert_eq!(prod.capacity(), 64);
-        assert_eq!(cons.capacity(), 64);
+        assert_eq!(prod.slot_count(), 64);
+        assert_eq!(cons.slot_count(), 64);
         assert!(cons.is_empty());
         assert!(!prod.is_full());
     }
