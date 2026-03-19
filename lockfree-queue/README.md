@@ -1,13 +1,13 @@
 # lockfree-queue
 
-Lock-free queue: SPSC (single-producer single-consumer).
+Lock-free **SPSC** (single-producer single-consumer) queue crate.
 
 ## SPSC implementation
 
-The queue is a **fixed-size ring buffer**. Capacity must be a **power of two**; head/tail indices advance with `(i + 1) & mask` where `mask = capacity - 1`.
+Fixed-size **ring buffer**; `SpscQueue::new(slot_count)` takes the number of **slots** (`slot_count`). It must be a **power of two** and **at least 2**. **One slot is reserved** so head and tail can tell **empty** from **full**, so the **maximum number of elements** you can hold at once is **one less than the slot count** (see **`slot_count()`** on the queue and handles).
 
-Occupancy is tracked with a shared **`AtomicU32` size**. The producer keeps **`tail`** and the consumer **`head`** (each on its own handle after `split`). Slots are **`UnsafeCell<Option<T>>`**: empty slots are `None`, live elements `Some(value)`.
+**Head** and **tail** are shared [`AtomicU32`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html)s (cache-line padded). The producer **writes** `tail` with `Release` after filling a slot; the consumer **loads** it with `Acquire` before reading. Slots are **`UnsafeCell<Option<T>>`** (no `T: Default` required).
 
 ## Possible improvement: `MaybeUninit<T>`
 
-Slots could use **`MaybeUninit<T>`** instead of **`Option<T>`** to avoid the discriminant (often smaller memory footprint and less branching for small `T`). That would mean **`write` / `read`** (or `assume_init_*`) per slot and careful **drop** logic when the queue or remaining items are destroyed—more `unsafe`, typical trade-off for tighter rings.
+Slots could use **`MaybeUninit<T>`** instead of **`Option<T>`** to drop the discriminant (often smaller and less branching for small `T`), at the cost of more **`unsafe`** and careful **drop** handling.

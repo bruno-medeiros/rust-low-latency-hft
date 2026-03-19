@@ -12,6 +12,10 @@ A portfolio repository to showcase low-latency / HFT projects, with latency and 
 
 *TODO: re-run benchmarks in Linux*
 
+### [lockfree-queue](lockfree-queue/)
+
+- SPSC lock-free ring buffer using head + tail indexes.
+
 ## Projects TODO:
 
 ## Additional Notes
