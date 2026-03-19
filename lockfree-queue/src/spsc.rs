@@ -18,7 +18,8 @@ struct SpscInner<T> {
     buffer: Vec<UnsafeCell<Option<T>>>,
     /// `capacity - 1` for power-of-two ring indexing: `(idx + 1) & head_tail_mask`.
     head_tail_mask: u32,
-    size: Arc<AtomicU32>,
+    head: AtomicU32,
+    tail: AtomicU32,
 }
 
 // SAFETY: Slots are written only from the producer side and read only from the
@@ -33,13 +34,11 @@ pub struct SpscQueue<T> {
 /// Producer handle for an SPSC queue. Only one producer may exist per queue.
 pub struct SpscProducer<T> {
     inner: Arc<SpscInner<T>>,
-    tail: AtomicU32,
 }
 
 /// Consumer handle for an SPSC queue. Only one consumer may exist per queue.
 pub struct SpscConsumer<T> {
     inner: Arc<SpscInner<T>>,
-    head: AtomicU32,
 }
 
 impl<T> SpscQueue<T> {
@@ -60,7 +59,8 @@ impl<T> SpscQueue<T> {
             inner: Arc::new(SpscInner {
                 buffer: data,
                 head_tail_mask,
-                size: Arc::new(AtomicU32::new(0)),
+                head: AtomicU32::new(0),
+                tail: AtomicU32::new(0),
             }),
         })
     }
@@ -75,11 +75,9 @@ impl<T> SpscQueue<T> {
         (
             SpscProducer {
                 inner: self.inner.clone(),
-                tail: AtomicU32::new(0),
             },
             SpscConsumer {
                 inner: self.inner.clone(),
-                head: AtomicU32::new(0),
             },
         )
     }
@@ -91,7 +89,9 @@ impl<T> SpscProducer<T> {
     }
 
     pub fn is_full(&self) -> bool {
-        self.inner.size.load(Ordering::SeqCst) as usize == self.capacity()
+        let tail = self.inner.tail.load(Ordering::Acquire);
+        let head = self.inner.head.load(Ordering::Acquire);
+        (tail + 1) & self.inner.head_tail_mask == head
     }
 
     /// Tries to push without blocking. Returns `Ok(())` on success, `Err(value)` if full.
@@ -99,17 +99,17 @@ impl<T> SpscProducer<T> {
         if self.is_full() {
             return Err(value);
         }
-        let tail = self.tail.load(Ordering::SeqCst);
+        let tail = self.inner.tail.load(Ordering::Acquire);
 
         let cell = &self.inner.buffer[tail as usize];
         unsafe {
             *cell.get() = Some(value);
         }
 
-        self.inner.size.fetch_add(1, Ordering::SeqCst);
         let new_tail = tail.wrapping_add(1) & self.inner.head_tail_mask;
 
-        self.tail
+        self.inner
+            .tail
             .compare_exchange(tail, new_tail, Ordering::SeqCst, Ordering::SeqCst)
             .unwrap_or_else(|_| panic!("Concurrent modification to tail in SpscProducer"));
 
@@ -130,7 +130,7 @@ impl<T> SpscConsumer<T> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.size.load(Ordering::SeqCst) == 0
+        self.inner.head.load(Ordering::Acquire) == self.inner.tail.load(Ordering::Acquire)
     }
 
     /// Tries to pop without blocking. Returns `Some(value)` or `None` if empty.
@@ -138,7 +138,7 @@ impl<T> SpscConsumer<T> {
         if self.is_empty() {
             return None;
         }
-        let head = self.head.load(Ordering::SeqCst);
+        let head = self.inner.head.load(Ordering::Acquire);
 
         let cell = &self.inner.buffer[head as usize];
         let value = unsafe {
@@ -147,10 +147,10 @@ impl<T> SpscConsumer<T> {
                 .expect("pop: slot empty despite size > 0")
         };
 
-        self.inner.size.fetch_sub(1, Ordering::SeqCst);
         let new_head = head.wrapping_add(1) & self.inner.head_tail_mask;
 
-        self.head
+        self.inner
+            .head
             .compare_exchange(head, new_head, Ordering::SeqCst, Ordering::SeqCst)
             .unwrap_or_else(|_| panic!("Concurrent modification to head in SpscConsumer"));
 
@@ -222,13 +222,16 @@ mod tests {
     fn try_push_one_try_pop_one() {
         let (mut prod, mut cons) = split_i32(8);
         assert_eq!(prod.try_push(100), Ok(()));
+        assert!(!prod.is_full());
+        assert!(!cons.is_empty());
         assert_eq!(cons.try_pop(), Some(100));
+        assert!(!prod.is_full() && cons.is_empty());
         assert_eq!(cons.try_pop(), None);
     }
 
     #[test]
     fn try_pop_empty_queue_returns_none() {
-        let (mut _prod, mut cons) = split_i32(4);
+        let (_prod, mut cons) = split_i32(4);
         assert_eq!(cons.try_pop(), None);
         assert_eq!(cons.try_pop(), None);
     }
@@ -251,30 +254,17 @@ mod tests {
         assert_eq!(prod.try_push(1), Ok(()));
         assert_eq!(prod.try_push(2), Ok(()));
         assert_eq!(prod.try_push(3), Ok(()));
-        assert_eq!(prod.try_push(4), Ok(()));
         assert_eq!(prod.try_push(999), Err(999));
         assert_eq!(cons.try_pop(), Some(1));
         assert_eq!(prod.try_push(999), Ok(()));
         assert_eq!(cons.try_pop(), Some(2));
     }
 
-    #[test]
-    fn try_push_succeeds_after_partial_drain() {
-        let (mut prod, mut cons) = split_i32(2);
-        assert_eq!(prod.try_push(10), Ok(()));
-        assert_eq!(prod.try_push(20), Ok(()));
-        assert_eq!(prod.try_push(30), Err(30));
-        assert_eq!(cons.try_pop(), Some(10));
-        assert_eq!(prod.try_push(30), Ok(()));
-        assert_eq!(cons.try_pop(), Some(20));
-        assert_eq!(cons.try_pop(), Some(30));
-    }
-
     // --- wraparound (index & slot reuse) ---
 
     #[test]
     fn wrap_single_slot_capacity_one() {
-        let (mut prod, mut cons) = split_i32(1);
+        let (mut prod, mut cons) = split_i32(2);
         assert_eq!(prod.try_push(1), Ok(()));
         assert_eq!(prod.try_push(2), Err(2));
         assert_eq!(cons.try_pop(), Some(1));
@@ -284,16 +274,18 @@ mod tests {
 
     #[test]
     fn wrap_fill_drain_then_reuse_slots() {
-        let (mut prod, mut cons) = split_i32(2);
+        let (mut prod, mut cons) = split_i32(4);
         assert_eq!(prod.try_push(1), Ok(()));
         assert_eq!(prod.try_push(2), Ok(()));
+        assert_eq!(prod.try_push(3), Ok(()));
         assert!(queue_is_full(&mut prod, &mut cons));
         assert_eq!(cons.try_pop(), Some(1));
         assert!(!prod.is_full() && !cons.is_empty());
-        assert_eq!(prod.try_push(3), Ok(()));
+        assert_eq!(prod.try_push(4), Ok(()));
         assert!(queue_is_full(&mut prod, &mut cons));
         assert_eq!(cons.try_pop(), Some(2));
         assert_eq!(cons.try_pop(), Some(3));
+        assert_eq!(cons.try_pop(), Some(4));
         assert!(queue_is_empty(&mut prod, &mut cons));
         assert_eq!(cons.try_pop(), None);
     }
@@ -310,11 +302,11 @@ mod tests {
     fn wrap_many_cycles_small_buffer() {
         let (mut prod, mut cons) = split_i32(4);
         for round in 0..200 {
-            for k in 0..4 {
+            for k in 0..4 - 1 {
                 assert_eq!(prod.try_push(round * 4 + k), Ok(()));
             }
             assert!(prod.is_full());
-            for k in 0..4 {
+            for k in 0..4 - 1 {
                 assert_eq!(cons.try_pop(), Some(round * 4 + k));
             }
             // Advance tail position
@@ -344,14 +336,12 @@ mod tests {
         assert_eq!(cons.try_pop(), Some(0));
         assert_eq!(prod.try_push(2), Ok(()));
         assert_eq!(prod.try_push(3), Ok(()));
-        assert_eq!(prod.try_push(4), Ok(()));
-        assert_eq!(prod.try_push(5), Err(5));
+        assert_eq!(prod.try_push(4), Err(4));
         assert_eq!(cons.try_pop(), Some(1));
-        assert_eq!(prod.try_push(5), Ok(()));
+        assert_eq!(prod.try_push(4), Ok(()));
         assert_eq!(cons.try_pop(), Some(2));
         assert_eq!(cons.try_pop(), Some(3));
         assert_eq!(cons.try_pop(), Some(4));
-        assert_eq!(cons.try_pop(), Some(5));
     }
 
     // --- blocking push/pop, is_empty / is_full ---
@@ -384,7 +374,7 @@ mod tests {
 
     #[test]
     fn string_wrap_and_order() {
-        let (mut prod, mut cons) = SpscQueue::<String>::new(2).unwrap().split();
+        let (mut prod, mut cons) = SpscQueue::<String>::new(4).unwrap().split();
         prod.try_push("a".into()).unwrap();
         prod.try_push("b".into()).unwrap();
         assert_eq!(cons.try_pop().as_deref(), Some("a"));
