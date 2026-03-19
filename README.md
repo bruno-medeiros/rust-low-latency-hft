@@ -16,6 +16,10 @@ A portfolio repository to showcase low-latency / HFT projects, with latency and 
 
 - SPSC lock-free ring buffer using head + tail indexes.
 
+### [market-data-feed](market-data-feed/)
+
+- ITCH-style binary market data feed handler.
+
 ## Projects TODO:
 
 ## Additional Notes
