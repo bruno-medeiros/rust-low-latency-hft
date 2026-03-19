@@ -89,7 +89,7 @@ impl<T> SpscProducer<T> {
     }
 
     pub fn is_full(&self) -> bool {
-        let tail = self.inner.tail.load(Ordering::Acquire);
+        let tail = self.inner.tail.load(Ordering::Relaxed);
         let head = self.inner.head.load(Ordering::Acquire);
         (tail + 1) & self.inner.head_tail_mask == head
     }
@@ -99,7 +99,7 @@ impl<T> SpscProducer<T> {
         if self.is_full() {
             return Err(value);
         }
-        let tail = self.inner.tail.load(Ordering::Acquire);
+        let tail = self.inner.tail.load(Ordering::Relaxed);
 
         let cell = &self.inner.buffer[tail as usize];
         unsafe {
@@ -108,10 +108,14 @@ impl<T> SpscProducer<T> {
 
         let new_tail = tail.wrapping_add(1) & self.inner.head_tail_mask;
 
+        #[cfg(debug_assertions)]
         self.inner
             .tail
-            .compare_exchange(tail, new_tail, Ordering::SeqCst, Ordering::SeqCst)
-            .unwrap_or_else(|_| panic!("Concurrent modification to tail in SpscProducer"));
+            .compare_exchange(tail, new_tail, Ordering::Release, Ordering::Relaxed)
+            .expect("Concurrent modification to tail in SpscProducer");
+
+        #[cfg(not(debug_assertions))]
+        self.inner.tail.store(new_tail, Ordering::Release);
 
         Ok(())
     }
@@ -130,7 +134,7 @@ impl<T> SpscConsumer<T> {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.head.load(Ordering::Acquire) == self.inner.tail.load(Ordering::Acquire)
+        self.inner.head.load(Ordering::Relaxed) == self.inner.tail.load(Ordering::Acquire)
     }
 
     /// Tries to pop without blocking. Returns `Some(value)` or `None` if empty.
@@ -138,7 +142,7 @@ impl<T> SpscConsumer<T> {
         if self.is_empty() {
             return None;
         }
-        let head = self.inner.head.load(Ordering::Acquire);
+        let head = self.inner.head.load(Ordering::Relaxed);
 
         let cell = &self.inner.buffer[head as usize];
         let value = unsafe {
@@ -149,10 +153,14 @@ impl<T> SpscConsumer<T> {
 
         let new_head = head.wrapping_add(1) & self.inner.head_tail_mask;
 
+        #[cfg(debug_assertions)]
         self.inner
             .head
-            .compare_exchange(head, new_head, Ordering::SeqCst, Ordering::SeqCst)
-            .unwrap_or_else(|_| panic!("Concurrent modification to head in SpscConsumer"));
+            .compare_exchange(head, new_head, Ordering::Release, Ordering::Relaxed)
+            .expect("Concurrent modification to head in SpscConsumer");
+
+        #[cfg(not(debug_assertions))]
+        self.inner.head.store(new_head, Ordering::Release);
 
         Some(value)
     }
