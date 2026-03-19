@@ -32,14 +32,12 @@ impl DatagramIngestor {
         self.buffer.extend_from_slice(datagram);
         loop {
             let data = &self.buffer[self.read_offset..];
-            // REVIEW err:
-            match self.decoder.pop_message(data) {
-                Ok(Some((msg, consumed))) => {
+            match self.decoder.pop_message(data)? {
+                Some((msg, consumed)) => {
                     on_message(msg)?;
                     self.read_offset += consumed;
                 }
-                Ok(None) => break,
-                Err(e) => return Err(e.into()),
+                None => break,
             }
         }
         if self.read_offset >= COMPACT_THRESHOLD {
