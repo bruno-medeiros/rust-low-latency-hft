@@ -5,6 +5,7 @@ members = [
     "bench-tool",
     "limit-order-book",
     "lockfree-queue",
+    "market-data-feed",
 ]
 
 [workspace.package]
@@ -19,6 +20,7 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 limit-order-book = { path = "limit-order-book" }
 lockfree-queue = { path = "lockfree-queue" }
+market-data-feed = { path = "market-data-feed" }
 core_affinity = "0.8"
 clap = { version = "4", features = ["derive"] }
 hdrhistogram = "7"
