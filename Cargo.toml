@@ -3,7 +3,6 @@ resolver = "3"
 
 members = [
     "bench-tool",
-    "feed-pipeline",
     "limit-order-book",
     "lockfree-queue",
     "market-data-feed",

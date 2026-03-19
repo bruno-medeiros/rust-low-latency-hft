@@ -1,10 +1,10 @@
 # Low Latency / HFT demos
 
-A portfolio repository to showcase low-latency / HFT projects, with latency and throughput benchmarks to demonstrate the achieved performance.
+A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput benchmarks.
 
 ## Projects
 
-### [Limit Order Book](limit-order-book/)
+### [Limit Order Book](limit-order-book/README.md)
 
 - a high-performance limit order book engine optimised for low-latency matching, with nanosecond-level benchmarks.
 - **p99 add: 42ns | p99 cancel: 42ns | throughput: 74M ops/sec | zero heap allocations on the hot path**
@@ -12,15 +12,14 @@ A portfolio repository to showcase low-latency / HFT projects, with latency and 
 
 *TODO: re-run benchmarks in Linux*
 
-### [lockfree-queue](lockfree-queue/)
+### [lockfree-queue](lockfree-queue/README.md)
 
 - SPSC lock-free ring buffer using head + tail indexes.
 
-### [market-data-feed](market-data-feed/)
+### [market-data-feed](market-data-feed/README.md)
 
 - ITCH-style binary market data feed handler.
 
-## Projects TODO:
 
 ## Additional Notes
 
