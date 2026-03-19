@@ -140,6 +140,7 @@ pub mod encode {
 
     const MSG_SYSTEM_EVENT: u8 = 0;
     const MSG_ADD_ORDER: u8 = 1;
+    const MSG_ORDER_CANCELED: u8 = 3;
 
     pub fn encode_system_event(text: &str) -> Vec<u8> {
         let text_bytes = text.as_bytes();
@@ -167,6 +168,16 @@ pub mod encode {
         buf.extend_from_slice(&price.to_le_bytes());
         buf.extend_from_slice(&(sym_bytes.len() as u16).to_be_bytes());
         buf.extend_from_slice(sym_bytes);
+        buf
+    }
+
+    pub fn encode_order_canceled(oid: u64, qty: u32) -> Vec<u8> {
+        let payload_len = 1 + 12; // type + oid:8 + qty:4
+        let mut buf = Vec::with_capacity(2 + payload_len);
+        buf.extend_from_slice(&(payload_len as u16).to_be_bytes());
+        buf.push(MSG_ORDER_CANCELED);
+        buf.extend_from_slice(&oid.to_le_bytes());
+        buf.extend_from_slice(&qty.to_le_bytes());
         buf
     }
 }
@@ -200,6 +211,18 @@ mod tests {
                 price: 5000,
                 symbol
             } if symbol == "AAPL"
+        ));
+    }
+
+    #[test]
+    fn decoder_roundtrip_order_canceled() {
+        let encoded = encode::encode_order_canceled(42, 500);
+        let mut decoder = ItchDecoder::new();
+        let (msg, consumed) = decoder.pop_message(&encoded).unwrap().unwrap();
+        assert_eq!(consumed, encoded.len());
+        assert!(matches!(
+            msg,
+            ItchMessage::OrderCanceled { oid: 42, qty: 500 }
         ));
     }
 }
