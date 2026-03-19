@@ -3,6 +3,7 @@ resolver = "3"
 
 members = [
     "bench-tool",
+    "feed-pipeline",
     "limit-order-book",
     "lockfree-queue",
     "market-data-feed",
@@ -18,6 +19,7 @@ slab = "0.4.12"
 bench-tool = { path = "bench-tool" }
 criterion = { version = "0.8.2", features = ["html_reports"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+feed-pipeline = { path = "feed-pipeline" }
 limit-order-book = { path = "limit-order-book" }
 lockfree-queue = { path = "lockfree-queue" }
 market-data-feed = { path = "market-data-feed" }
