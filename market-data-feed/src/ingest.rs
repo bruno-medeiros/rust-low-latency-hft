@@ -1,7 +1,7 @@
 //! Ingest raw datagrams into a buffer for decoding.
 
+use crate::DecodeError;
 use crate::decode::ItchDecoder;
-use crate::error::IngestError;
 use crate::message::ItchMessage;
 
 const COMPACT_THRESHOLD: usize = 64 * 1024;
@@ -24,11 +24,12 @@ impl DatagramIngestor {
 
     /// Feed one datagram (e.g. MoldUDP payload or raw UDP). Invokes `on_message` for each decoded record.
     /// Messages borrow from the internal buffer; the callback must not retain references beyond the call.
-    pub fn push_datagram(
+    pub fn push_datagram<E: From<DecodeError>>(
+        // REVIEW: err spec above
         &mut self,
         datagram: &[u8],
-        mut on_message: impl FnMut(ItchMessage<'_>) -> Result<(), IngestError>,
-    ) -> Result<(), IngestError> {
+        mut on_message: impl FnMut(ItchMessage<'_>) -> Result<(), E>,
+    ) -> Result<(), E> {
         self.buffer.extend_from_slice(datagram);
         loop {
             let data = &self.buffer[self.read_offset..];
@@ -66,7 +67,7 @@ mod tests {
         let mut ingestor = DatagramIngestor::new();
         let mut count = 0;
         ingestor
-            .push_datagram(&datagram, |msg| {
+            .push_datagram::<DecodeError>(&datagram, |msg| {
                 assert!(matches!(
                     msg,
                     ItchMessage::SystemEvent { text } if text == "START"
@@ -86,7 +87,7 @@ mod tests {
         let mut ingestor = DatagramIngestor::new();
         let mut count = 0;
         ingestor
-            .push_datagram(&datagram, |msg| {
+            .push_datagram::<DecodeError>(&datagram, |msg| {
                 match count {
                     0 => assert!(matches!(msg, ItchMessage::SystemEvent { text } if text == "A")),
                     1 => assert!(matches!(msg, ItchMessage::SystemEvent { text } if text == "B")),
@@ -117,14 +118,14 @@ mod tests {
         let mut ingestor = DatagramIngestor::new();
         let mut count = 0;
         ingestor
-            .push_datagram(first, |_msg| {
+            .push_datagram::<DecodeError>(first, |_msg| {
                 count += 1;
                 Ok(())
             })
             .unwrap();
         assert_eq!(count, 0);
         ingestor
-            .push_datagram(second, |msg| {
+            .push_datagram::<DecodeError>(second, |msg| {
                 assert!(matches!(
                     msg,
                     ItchMessage::SystemEvent { text } if text == "SPLIT"
