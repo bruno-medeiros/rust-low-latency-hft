@@ -495,6 +495,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "matching-pipeline"
+version = "0.1.0"
+dependencies = [
+ "limit-order-book",
+ "lockfree-queue",
+ "thiserror",
+]
+
+[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
