@@ -1,35 +1,42 @@
-use serde::{Deserialize, Serialize};
-
 use crate::format_unit::{fmt_delta_bytes, fmt_delta_count, fmt_delta_duration, fmt_delta_ops_sec};
-use crate::renderer::{MarkdownRenderer, Renderer, TextRenderer};
-use crate::report::{BenchReport, ScenarioResult};
+use crate::renderer::Renderer;
+use crate::report::{LatencyScenario, ThroughputScenario};
 
-/// Pair-wise compare scenarios by name between two section payloads (baseline vs current order).
-pub(crate) fn compare_scenarios(
-    baseline: &[ScenarioResult],
-    current: &[ScenarioResult],
+pub(crate) fn compare_latency_scenarios(
+    baseline: &[LatencyScenario],
+    current: &[LatencyScenario],
 ) -> Vec<ScenarioComparison> {
     let mut scenarios = Vec::new();
-
-    for current in current {
-        let base = match baseline.iter().find(|s| s.name() == current.name()) {
-            Some(b) => b,
-            None => continue,
+    for cur in current {
+        let Some(base) = baseline.iter().find(|b| b.name == cur.name) else {
+            continue;
         };
-
-        push_scenario_pair(&mut scenarios, base, current);
+        push_latency_pair(&mut scenarios, base, cur);
     }
-
     scenarios
 }
 
-fn push_scenario_pair(
+pub(crate) fn compare_throughput_scenarios(
+    baseline: &[ThroughputScenario],
+    current: &[ThroughputScenario],
+) -> Vec<ScenarioComparison> {
+    let mut scenarios = Vec::new();
+    for cur in current {
+        let Some(base) = baseline.iter().find(|b| b.name == cur.name) else {
+            continue;
+        };
+        push_throughput_pair(&mut scenarios, base, cur);
+    }
+    scenarios
+}
+
+fn push_latency_pair(
     scenarios: &mut Vec<ScenarioComparison>,
-    base: &ScenarioResult,
-    current: &ScenarioResult,
+    l_a: &LatencyScenario,
+    l_b: &LatencyScenario,
 ) {
-    let ca = current.allocations();
-    let ba = base.allocations();
+    let ca = &l_b.allocations;
+    let ba = &l_a.allocations;
 
     let alloc_cmp = AllocComparison {
         avg_allocs_per_op: MetricDelta::new(ba.avg_allocs_per_op, ca.avg_allocs_per_op),
@@ -37,48 +44,119 @@ fn push_scenario_pair(
         avg_bytes_per_op: MetricDelta::new(ba.avg_bytes_per_op, ca.avg_bytes_per_op),
     };
 
-    match (base, current) {
-        (ScenarioResult::Latency(l_a), ScenarioResult::Latency(l_b)) => {
-            scenarios.push(ScenarioComparison::Latency {
-                name: l_a.name.clone(),
-                latency: LatencyComparison {
-                    min: MetricDelta::from_u64(l_a.latency.min_ns, l_b.latency.min_ns),
-                    p50: MetricDelta::from_u64(l_a.latency.p50_ns, l_b.latency.p50_ns),
-                    p90: MetricDelta::from_u64(l_a.latency.p90_ns, l_b.latency.p90_ns),
-                    p95: MetricDelta::from_u64(l_a.latency.p95_ns, l_b.latency.p95_ns),
-                    p99: MetricDelta::from_u64(l_a.latency.p99_ns, l_b.latency.p99_ns),
-                    p999: MetricDelta::from_u64(l_a.latency.p999_ns, l_b.latency.p999_ns),
-                    max: MetricDelta::from_u64(l_a.latency.max_ns, l_b.latency.max_ns),
-                    mean: MetricDelta::new(l_a.latency.mean_ns, l_b.latency.mean_ns),
-                },
-                allocations: alloc_cmp,
-            });
-        }
-        (ScenarioResult::Throughput(t_a), ScenarioResult::Throughput(t_b)) => {
-            scenarios.push(ScenarioComparison::Throughput {
-                name: t_a.name.clone(),
-                throughput_ops_per_sec: MetricDelta::new(
-                    t_a.throughput_ops_per_sec,
-                    t_b.throughput_ops_per_sec,
-                ),
-                allocations: alloc_cmp,
-                setup_allocs: MetricDelta::from_u64(t_a.setup_allocs, t_b.setup_allocs),
-                setup_bytes: MetricDelta::from_u64(t_a.setup_bytes, t_b.setup_bytes),
-            });
-        }
-        _ => {}
+    scenarios.push(ScenarioComparison::Latency {
+        name: l_a.name.clone(),
+        latency: LatencyComparison {
+            p50: MetricDelta::from_u64(l_a.latency.p50_ns, l_b.latency.p50_ns),
+            p99: MetricDelta::from_u64(l_a.latency.p99_ns, l_b.latency.p99_ns),
+            p999: MetricDelta::from_u64(l_a.latency.p999_ns, l_b.latency.p999_ns),
+            mean: MetricDelta::new(l_a.latency.mean_ns, l_b.latency.mean_ns),
+        },
+        allocations: alloc_cmp,
+    });
+}
+
+fn push_throughput_pair(
+    scenarios: &mut Vec<ScenarioComparison>,
+    t_a: &ThroughputScenario,
+    t_b: &ThroughputScenario,
+) {
+    let ca = &t_b.allocations;
+    let ba = &t_a.allocations;
+
+    let alloc_cmp = AllocComparison {
+        avg_allocs_per_op: MetricDelta::new(ba.avg_allocs_per_op, ca.avg_allocs_per_op),
+        avg_deallocs_per_op: MetricDelta::new(ba.avg_deallocs_per_op, ca.avg_deallocs_per_op),
+        avg_bytes_per_op: MetricDelta::new(ba.avg_bytes_per_op, ca.avg_bytes_per_op),
+    };
+
+    scenarios.push(ScenarioComparison::Throughput {
+        name: t_a.name.clone(),
+        throughput_ops_per_sec: MetricDelta::new(
+            t_a.throughput_ops_per_sec,
+            t_b.throughput_ops_per_sec,
+        ),
+        allocations: alloc_cmp,
+        setup_allocs: MetricDelta::from_u64(t_a.setup_allocs, t_b.setup_allocs),
+        setup_bytes: MetricDelta::from_u64(t_a.setup_bytes, t_b.setup_bytes),
+    });
+}
+
+fn render_latency_comparison_rows<R: Renderer>(
+    out: &mut String,
+    renderer: &R,
+    latency_scenarios: &[(&String, &LatencyComparison, &AllocComparison)],
+) {
+    let latency_headers = &[
+        "Operation",
+        "p50",
+        "p99",
+        "p99.9",
+        "mean",
+        "allocs/op",
+        "deallocs/op",
+        "bytes/op",
+    ];
+
+    renderer.render_table_start(out, latency_headers);
+    for (name, latency, allocations) in latency_scenarios {
+        let cells = vec![
+            (*name).clone(),
+            fmt_delta_duration(&latency.p50),
+            fmt_delta_duration(&latency.p99),
+            fmt_delta_duration(&latency.p999),
+            fmt_delta_duration(&latency.mean),
+            fmt_delta_count(&allocations.avg_allocs_per_op),
+            fmt_delta_count(&allocations.avg_deallocs_per_op),
+            fmt_delta_bytes(&allocations.avg_bytes_per_op),
+        ];
+        renderer.render_table_row(out, latency_headers, &cells);
     }
 }
 
-pub(crate) fn render_scenario_comparison_tables<R: Renderer>(
+fn render_throughput_comparison_rows<R: Renderer>(
+    out: &mut String,
+    renderer: &R,
+    throughput_scenarios: &[(
+        &String,
+        &MetricDelta,
+        &AllocComparison,
+        &MetricDelta,
+        &MetricDelta,
+    )],
+) {
+    let throughput_headers = &[
+        "Operation",
+        "ops/sec",
+        "allocs/op",
+        "deallocs/op",
+        "bytes/op",
+        "setup allocs",
+        "setup bytes",
+    ];
+    renderer.render_table_start(out, throughput_headers);
+    for (name, throughput_ops_per_sec, allocations, setup_allocs, setup_bytes) in
+        throughput_scenarios
+    {
+        let cells = vec![
+            (*name).clone(),
+            fmt_delta_ops_sec(throughput_ops_per_sec),
+            fmt_delta_count(&allocations.avg_allocs_per_op),
+            fmt_delta_count(&allocations.avg_deallocs_per_op),
+            fmt_delta_bytes(&allocations.avg_bytes_per_op),
+            fmt_delta_count(setup_allocs),
+            fmt_delta_bytes(setup_bytes),
+        ];
+        renderer.render_table_row(out, throughput_headers, &cells);
+    }
+}
+
+/// Renders only latency delta rows (and optional #### vs baseline) when embedded in the report.
+pub(crate) fn render_latency_comparison_embedded<R: Renderer>(
     out: &mut String,
     renderer: &R,
     scenarios: &[ScenarioComparison],
 ) {
-    if scenarios.is_empty() {
-        return;
-    }
-
     let latency_scenarios: Vec<_> = scenarios
         .iter()
         .filter_map(|scenario| match scenario {
@@ -91,43 +169,20 @@ pub(crate) fn render_scenario_comparison_tables<R: Renderer>(
         })
         .collect();
 
-    if !latency_scenarios.is_empty() {
-        let latency_headers = &[
-            "Operation",
-            "p50",
-            "p99",
-            "p99.9",
-            "mean",
-            "allocs/op",
-            "deallocs/op",
-            "bytes/op",
-        ];
-
-        renderer.render_table_start(out, latency_headers);
-        for (name, latency, allocations) in latency_scenarios {
-            let cells = vec![
-                name.clone(),
-                fmt_delta_duration(&latency.p50),
-                fmt_delta_duration(&latency.p99),
-                fmt_delta_duration(&latency.p999),
-                fmt_delta_duration(&latency.mean),
-                fmt_delta_count(&allocations.avg_allocs_per_op),
-                fmt_delta_count(&allocations.avg_deallocs_per_op),
-                fmt_delta_bytes(&allocations.avg_bytes_per_op),
-            ];
-            renderer.render_table_row(out, latency_headers, &cells);
-        }
+    if latency_scenarios.is_empty() {
+        return;
     }
 
-    let throughput_headers = &[
-        "Operation",
-        "ops/sec",
-        "allocs/op",
-        "deallocs/op",
-        "bytes/op",
-        "setup allocs",
-        "setup bytes",
-    ];
+    renderer.render_heading(out, 4, "vs baseline");
+    render_latency_comparison_rows(out, renderer, &latency_scenarios);
+}
+
+/// Renders only throughput delta rows (and #### vs baseline) after the main throughput table.
+pub(crate) fn render_throughput_comparison_embedded<R: Renderer>(
+    out: &mut String,
+    renderer: &R,
+    scenarios: &[ScenarioComparison],
+) {
     let throughput_scenarios: Vec<_> = scenarios
         .iter()
         .filter_map(|scenario| match scenario {
@@ -148,38 +203,16 @@ pub(crate) fn render_scenario_comparison_tables<R: Renderer>(
         })
         .collect();
 
-    if !throughput_scenarios.is_empty() {
-        renderer.render_heading(out, 3, "Throughput");
-        renderer.render_table_start(out, throughput_headers);
-        for (name, throughput_ops_per_sec, allocations, setup_allocs, setup_bytes) in
-            throughput_scenarios
-        {
-            let cells = vec![
-                name.clone(),
-                fmt_delta_ops_sec(throughput_ops_per_sec),
-                fmt_delta_count(&allocations.avg_allocs_per_op),
-                fmt_delta_count(&allocations.avg_deallocs_per_op),
-                fmt_delta_bytes(&allocations.avg_bytes_per_op),
-                fmt_delta_count(setup_allocs),
-                fmt_delta_bytes(setup_bytes),
-            ];
-            renderer.render_table_row(out, throughput_headers, &cells);
-        }
+    if throughput_scenarios.is_empty() {
+        return;
     }
+
+    renderer.render_heading(out, 4, "vs baseline");
+    render_throughput_comparison_rows(out, renderer, &throughput_scenarios);
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Comparison {
-    pub baseline_title: String,
-    pub baseline_timestamp: String,
-    pub current_title: String,
-    pub current_timestamp: String,
-    pub scenarios: Vec<ScenarioComparison>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum ScenarioComparison {
+#[derive(Debug, Clone)]
+pub(crate) enum ScenarioComparison {
     Latency {
         name: String,
         latency: LatencyComparison,
@@ -194,29 +227,23 @@ pub enum ScenarioComparison {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LatencyComparison {
-    pub min: MetricDelta,
+#[derive(Debug, Clone)]
+pub(crate) struct LatencyComparison {
     pub p50: MetricDelta,
-    pub p90: MetricDelta,
-    pub p95: MetricDelta,
     pub p99: MetricDelta,
     pub p999: MetricDelta,
-    pub max: MetricDelta,
     pub mean: MetricDelta,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AllocComparison {
+#[derive(Debug, Clone)]
+pub(crate) struct AllocComparison {
     pub avg_allocs_per_op: MetricDelta,
-    #[serde(default)]
     pub avg_deallocs_per_op: MetricDelta,
     pub avg_bytes_per_op: MetricDelta,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct MetricDelta {
-    pub baseline: f64,
+#[derive(Debug, Clone)]
+pub(crate) struct MetricDelta {
     pub current: f64,
     pub pct_change: f64,
 }
@@ -232,74 +259,10 @@ impl MetricDelta {
         } else {
             ((current - baseline) / baseline) * 100.0
         };
-        Self {
-            baseline,
-            current,
-            pct_change,
-        }
+        Self { current, pct_change }
     }
 
     pub fn from_u64(baseline: u64, current: u64) -> Self {
         Self::new(baseline as f64, current as f64)
-    }
-}
-
-impl Comparison {
-    pub fn to_json_pretty(&self) -> String {
-        serde_json::to_string_pretty(self).expect("failed to serialize comparison")
-    }
-
-    pub fn render<R: Renderer>(&self, renderer: &R) -> String {
-        let mut out = String::new();
-
-        renderer.render_heading(&mut out, 2, "Comparison vs Baseline");
-        renderer.render_properties(
-            &mut out,
-            &[(
-                "Baseline",
-                format!("\"{}\" ({})", self.baseline_title, self.baseline_timestamp),
-            )],
-        );
-
-        render_scenario_comparison_tables(&mut out, renderer, &self.scenarios);
-
-        out.push('\n');
-        out
-    }
-
-    pub fn to_text(&self) -> String {
-        self.render(&TextRenderer)
-    }
-
-    pub fn to_markdown(&self) -> String {
-        self.render(&MarkdownRenderer::new())
-    }
-}
-
-impl BenchReport {
-    pub fn compare(&self, baseline: &BenchReport) -> Comparison {
-        let mut scenarios = Vec::new();
-
-        for section in &self.sections {
-            let Some(base_section) = baseline
-                .sections
-                .iter()
-                .find(|s| s.title == section.title)
-            else {
-                continue;
-            };
-            scenarios.extend(compare_scenarios(
-                &base_section.scenarios,
-                &section.scenarios,
-            ));
-        }
-
-        Comparison {
-            baseline_title: baseline.metadata.title.clone(),
-            baseline_timestamp: baseline.metadata.timestamp.clone(),
-            current_title: self.metadata.title.clone(),
-            current_timestamp: self.metadata.timestamp.clone(),
-            scenarios,
-        }
     }
 }
