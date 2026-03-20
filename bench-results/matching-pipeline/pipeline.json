@@ -1,0 +1,49 @@
+{
+  "metadata": {
+    "title": "Matching pipeline",
+    "timestamp": "2026-03-20T19:15:29Z",
+    "hardware": {
+      "cpu_model": "Apple M4 Pro",
+      "cpu_cores": 12,
+      "memory_gb": 24.0,
+      "os": "Darwin 15.7.4",
+      "arch": "aarch64",
+      "hostname": "Mac.mynet"
+    },
+    "rustc_version": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
+    "clock_source": "OS clock (platform fallback via quanta)"
+  },
+  "sections": [
+    {
+      "title": "",
+      "params": {
+        "queue_slots": "4096",
+        "sample": "LOBSTER_SampleFiles/GOOG_2012-06-21_34200000_57600000_message_1.csv"
+      },
+      "throughput_scenarios": [
+        {
+          "name": "Pipeline (Lobster data)",
+          "samples": 40,
+          "throughput_ops_per_sec": 13823307.540395375,
+          "allocations": {
+            "total_allocs": 681,
+            "total_deallocs": 680,
+            "total_bytes": 962227264,
+            "avg_allocs_per_op": 17.025,
+            "avg_deallocs_per_op": 17.0,
+            "avg_bytes_per_op": 24055681.6
+          },
+          "setup_allocs": 0,
+          "setup_bytes": 0,
+          "event_counts": {
+            "accepted": 974720,
+            "rejected": 203720,
+            "fill": 528800,
+            "filled": 545200,
+            "cancelled": 333440
+          }
+        }
+      ]
+    }
+  ]
+}
