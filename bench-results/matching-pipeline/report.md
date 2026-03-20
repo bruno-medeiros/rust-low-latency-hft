@@ -3,7 +3,7 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-03-20T19:15:29Z |
+| Timestamp | 2026-03-20T20:11:47Z |
 | CPU | Apple M4 Pro |
 | Cores | 12 |
 | Memory | 24.0 GB |
@@ -23,11 +23,11 @@
 
 | Scenario | ops/sec | allocs/op | deallocs/op | bytes/op | setup allocs | setup bytes |
 |----------|---------|-----------|-------------|----------|--------------|-------------|
-| Pipeline (Lobster data) | 13823308 | 17.0 | 17.0 | 22.9MiB | 0 | 0B |
+| Pipeline (Lobster data) | 18421295 | 0.3 | 0.0 | 2B | 11 | 21.8MiB |
 
 | Scenario | Accepted | Rejected | Fill | Filled | Cancelled |
 |----------|----------|----------|------|--------|-----------|
-| Pipeline (Lobster data) | 974720 | 203720 | 528800 | 545200 | 333440 |
+| Pipeline (Lobster data) | 961579 | 224768 | 620090 | 633464 | 325533 |
 
 ##### Throughput flamegraph
 
