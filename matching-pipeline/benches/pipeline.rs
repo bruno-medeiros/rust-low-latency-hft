@@ -29,8 +29,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     runner.apply_core_pinning();
 
+    let mut report = runner.initial_report();
+
     runner.run_throughput(
         "Pipeline replay (commands/s)",
+        // FIXME
         || (),
         |_, sink, op_count| {
             let cmds = test_data::goog_sample_commands().to_vec();
@@ -47,6 +50,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         THROUGHPUT_ITERS,
     );
 
-    let report = runner.finish();
+    runner.finish(&mut report);
     args.execute(&report)
 }

@@ -13,6 +13,13 @@ use crate::{Renderer, fmt_duration};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReport {
     pub metadata: ReportMetadata,
+    pub sections: Vec<BenchReportSection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BenchReportSection {
+    pub title: String,
+    pub params: BTreeMap<String, String>,
     pub scenarios: Vec<ScenarioResult>,
 }
 
@@ -35,7 +42,6 @@ pub struct ReportMetadata {
 pub struct BenchSettings {
     pub warmup_iters: u64,
     pub sample_iters: u64,
-    pub params: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,13 +117,12 @@ pub struct AllocStats {
 }
 
 impl BenchReport {
-    pub(crate) fn build(
+    /// Creates a report with metadata and empty sections. 
+    pub fn new_with_metadata(
         title: String,
         warmup_iters: u64,
         sample_iters: u64,
-        params: BTreeMap<String, String>,
         pin_core: Option<usize>,
-        scenarios: Vec<ScenarioResult>,
     ) -> Self {
         let cpu_pinning_note = pin_core.map(|c| format!("Benchmark thread pinned to core {c}"));
 
@@ -129,14 +134,32 @@ impl BenchReport {
                 settings: BenchSettings {
                     warmup_iters,
                     sample_iters,
-                    params,
                 },
                 rustc_version: detect_rustc_version(),
                 clock_source: detect_clock_source(),
                 cpu_pinning_note,
             },
-            scenarios,
+            sections: Vec::new(),
         }
+    }
+
+    pub(crate) fn push_section(
+        &mut self,
+        title: String,
+        params: BTreeMap<String, String>,
+        scenarios: Vec<ScenarioResult>,
+    ) {
+        self.sections.push(BenchReportSection {
+            title,
+            params,
+            scenarios,
+        });
+    }
+
+    pub(crate) fn all_scenarios(&self) -> impl Iterator<Item = &ScenarioResult> {
+        self.sections
+            .iter()
+            .flat_map(|s| s.scenarios.iter())
     }
 
     pub fn to_json_pretty(&self) -> String {
@@ -154,6 +177,108 @@ impl BenchReport {
     pub fn load_json(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let json = std::fs::read_to_string(path)?;
         Ok(Self::from_json(&json)?)
+    }
+}
+
+fn render_section_scenarios<R: Renderer>(out: &mut String, renderer: &R, scenarios: &[ScenarioResult]) {
+    let latency_headers = &[
+        "Operation",
+        "min",
+        "p50",
+        "p90",
+        "p95",
+        "p99",
+        "p99.9",
+        "max",
+        "mean",
+        "stdev",
+        "allocs/op",
+        "deallocs/op",
+        "bytes/op",
+    ];
+
+    let latency: Vec<_> = scenarios
+        .iter()
+        .filter_map(|s| match s {
+            ScenarioResult::Latency(l) => Some(l),
+            _ => None,
+        })
+        .collect();
+
+    renderer.render_heading(out, 3, "Results");
+    renderer.render_table_start(out, latency_headers);
+    for ls in &latency {
+        let cells = vec![
+            ls.name.clone(),
+            fmt_duration(ls.latency.min_ns),
+            fmt_duration(ls.latency.p50_ns),
+            fmt_duration(ls.latency.p90_ns),
+            fmt_duration(ls.latency.p95_ns),
+            fmt_duration(ls.latency.p99_ns),
+            fmt_duration(ls.latency.p999_ns),
+            fmt_duration(ls.latency.max_ns),
+            fmt_duration_f64(ls.latency.mean_ns),
+            fmt_duration_f64(ls.latency.stdev_ns),
+            format!("{:.1}", ls.allocations.avg_allocs_per_op),
+            format!("{:.1}", ls.allocations.avg_deallocs_per_op),
+            fmt_bytes_f64(ls.allocations.avg_bytes_per_op),
+        ];
+        renderer.render_table_row(out, latency_headers, &cells);
+    }
+
+    let throughput: Vec<_> = scenarios
+        .iter()
+        .filter_map(|s| match s {
+            ScenarioResult::Throughput(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+
+    if !throughput.is_empty() {
+        let throughput_headers = &[
+            "Scenario",
+            "ops/sec",
+            "allocs/op",
+            "deallocs/op",
+            "bytes/op",
+            "setup allocs",
+            "setup bytes",
+        ];
+        renderer.render_heading(out, 4, "Throughput");
+        renderer.render_table_start(out, throughput_headers);
+        for t in &throughput {
+            let cells = vec![
+                t.name.clone(),
+                format!("{:.0}", t.throughput_ops_per_sec),
+                format!("{:.1}", t.allocations.avg_allocs_per_op),
+                format!("{:.1}", t.allocations.avg_deallocs_per_op),
+                fmt_bytes_f64(t.allocations.avg_bytes_per_op),
+                format!("{}", t.setup_allocs),
+                fmt_bytes_f64(t.setup_bytes as f64),
+            ];
+            renderer.render_table_row(out, throughput_headers, &cells);
+        }
+        for t in &throughput {
+            let ec = &t.event_counts;
+            let event_headers = &["Event type", "Count"];
+            renderer.render_heading(out, 5, &format!("{} — event counts", t.name));
+            renderer.render_table_start(out, event_headers);
+            for (label, count) in [
+                ("Accepted", ec.accepted),
+                ("Rejected", ec.rejected),
+                ("Fill", ec.fill),
+                ("Filled", ec.filled),
+                ("Cancelled", ec.cancelled),
+            ] {
+                renderer.render_table_row(
+                    out,
+                    event_headers,
+                    &[label.to_string(), count.to_string()],
+                );
+            }
+        }
+        renderer.render_heading(out, 5, "Throughput flamegraph");
+        renderer.render_throughput_extra(out);
     }
 }
 
@@ -182,113 +307,20 @@ impl BenchReport {
                 m.settings.sample_iters, m.settings.warmup_iters
             ),
         ));
-        for (k, v) in &m.settings.params {
-            props.push((k.as_str(), v.clone()));
-        }
 
         renderer.render_heading(&mut out, 1, &format!("{} - Latency Report", m.title));
         renderer.render_properties(&mut out, &props);
 
-        let latency_headers = &[
-            "Operation",
-            "min",
-            "p50",
-            "p90",
-            "p95",
-            "p99",
-            "p99.9",
-            "max",
-            "mean",
-            "stdev",
-            "allocs/op",
-            "deallocs/op",
-            "bytes/op",
-        ];
-
-        let latency: Vec<_> = self
-            .scenarios
-            .iter()
-            .filter_map(|s| match s {
-                ScenarioResult::Latency(l) => Some(l),
-                _ => None,
-            })
-            .collect();
-
-        renderer.render_heading(&mut out, 2, "Results");
-        renderer.render_table_start(&mut out, latency_headers);
-        for ls in &latency {
-            let cells = vec![
-                ls.name.clone(),
-                fmt_duration(ls.latency.min_ns),
-                fmt_duration(ls.latency.p50_ns),
-                fmt_duration(ls.latency.p90_ns),
-                fmt_duration(ls.latency.p95_ns),
-                fmt_duration(ls.latency.p99_ns),
-                fmt_duration(ls.latency.p999_ns),
-                fmt_duration(ls.latency.max_ns),
-                fmt_duration_f64(ls.latency.mean_ns),
-                fmt_duration_f64(ls.latency.stdev_ns),
-                format!("{:.1}", ls.allocations.avg_allocs_per_op),
-                format!("{:.1}", ls.allocations.avg_deallocs_per_op),
-                fmt_bytes_f64(ls.allocations.avg_bytes_per_op),
-            ];
-            renderer.render_table_row(&mut out, latency_headers, &cells);
-        }
-
-        let throughput: Vec<_> = self
-            .scenarios
-            .iter()
-            .filter_map(|s| match s {
-                ScenarioResult::Throughput(t) => Some(t),
-                _ => None,
-            })
-            .collect();
-
-        if !throughput.is_empty() {
-            let throughput_headers = &[
-                "Scenario",
-                "ops/sec",
-                "allocs/op",
-                "deallocs/op",
-                "bytes/op",
-                "setup allocs",
-                "setup bytes",
-            ];
-            renderer.render_heading(&mut out, 3, "Throughput");
-            renderer.render_table_start(&mut out, throughput_headers);
-            for t in &throughput {
-                let cells = vec![
-                    t.name.clone(),
-                    format!("{:.0}", t.throughput_ops_per_sec),
-                    format!("{:.1}", t.allocations.avg_allocs_per_op),
-                    format!("{:.1}", t.allocations.avg_deallocs_per_op),
-                    fmt_bytes_f64(t.allocations.avg_bytes_per_op),
-                    format!("{}", t.setup_allocs),
-                    fmt_bytes_f64(t.setup_bytes as f64),
-                ];
-                renderer.render_table_row(&mut out, throughput_headers, &cells);
+        for section in &self.sections {
+            renderer.render_heading(&mut out, 2, &section.title);
+            let mut section_props: Vec<(&str, String)> = Vec::new();
+            for (k, v) in &section.params {
+                section_props.push((k.as_str(), v.clone()));
             }
-            for t in &throughput {
-                let ec = &t.event_counts;
-                let event_headers = &["Event type", "Count"];
-                renderer.render_heading(&mut out, 4, &format!("{} — event counts", t.name));
-                renderer.render_table_start(&mut out, event_headers);
-                for (label, count) in [
-                    ("Accepted", ec.accepted),
-                    ("Rejected", ec.rejected),
-                    ("Fill", ec.fill),
-                    ("Filled", ec.filled),
-                    ("Cancelled", ec.cancelled),
-                ] {
-                    renderer.render_table_row(
-                        &mut out,
-                        event_headers,
-                        &[label.to_string(), count.to_string()],
-                    );
-                }
+            if !section_props.is_empty() {
+                renderer.render_properties(&mut out, &section_props);
             }
-            renderer.render_heading(&mut out, 4, "Throughput flamegraph");
-            renderer.render_throughput_extra(&mut out);
+            render_section_scenarios(&mut out, renderer, &section.scenarios);
         }
 
         out.push('\n');
