@@ -4,6 +4,7 @@ pub mod command;
 mod consumer;
 pub mod lobster;
 pub mod pipeline;
+pub mod test_data;
 
 pub use command::OrderCommand;
 pub use limit_order_book::types::{OrderId, Price, Qty, Side};

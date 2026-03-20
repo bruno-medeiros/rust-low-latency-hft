@@ -8,3 +8,10 @@ rust-version.workspace = true
 limit-order-book = { workspace = true }
 lockfree-queue = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+bench-tool = { workspace = true }
+
+[[bench]]
+name = "lobster_goog"
+harness = false
