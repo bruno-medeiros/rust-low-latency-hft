@@ -1,7 +1,6 @@
-use std::collections::BTreeMap;
 use std::hint::black_box;
 
-use bench_tool::{BenchReport, BenchRunner, CliArgs};
+use bench_tool::{BenchReport, BenchReportSection, BenchRunner, CliArgs};
 use limit_order_book::types::Side;
 use limit_order_book::{CountingEventSink, LimitOrderBook, LimitOrderBookV0, LimitOrderBookV1};
 
@@ -55,6 +54,18 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         fill_crowded_sell(&mut b);
         b
     };
+
+    let mut section = BenchReportSection::new("Latency");
+    section.add_param("BENCH_ITERS", BENCH_ITERS.to_string());
+    section.add_param("WARMUP_ITERS", WARMUP_ITERS.to_string());
+
+    section.add_param("book_levels", NUM_LEVELS.to_string());
+    section.add_param("orders_per_level", ORDERS_PER_LEVEL.to_string());
+    section.add_param(
+        "resting_orders",
+        (NUM_LEVELS * ORDERS_PER_LEVEL * 2).to_string(),
+    );
+    section.add_param("crowded_level_orders", CROWDED_LEVEL_ORDERS.to_string());
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -189,12 +200,9 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         BENCH_ITERS,
     );
 
-    let mut latency_params = runner.params().clone();
-    latency_params.insert("BENCH_ITERS".into(), BENCH_ITERS.to_string());
-    latency_params.insert("WARMUP_ITERS".into(), WARMUP_ITERS.to_string());
-    runner.finish_section(report, "Latency", latency_params);
+    report.sections.push(section);
 
-    // ── Throughput (exhaustive mix) ─────────────────────────────────────────────
+    // ── Throughput (realistic mix) ─────────────────────────────────────────────
     // Realistic mix: passive adds (unfilled), aggressive adds (multiple fills), cancels, spread.
     // Per cycle: 20 passive buy, 20 passive sell, 8 aggressive buy (hit our sells), 20 cancel buy,
     // 8 cancel sell (remaining after match), 12 spread. Steady state: aggressors hit our passive
@@ -206,6 +214,11 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
     const RESTING_QTY: u64 = 100;
     const AGGRESSIVE_QTY: u64 = 150; // > RESTING_QTY so each aggressor gets 2+ Fill events
     const THROUGHPUT_OUTER_ITERS: u64 = 2_000_000;
+
+    let section = BenchReportSection::new("Throughput (realistic mix)");
+
+    // FIXME: add common params.
+    //section
 
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
@@ -285,8 +298,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         THROUGHPUT_OUTER_ITERS,
     );
 
-    let throughput_params: BTreeMap<String, String> = runner.params().clone();
-    runner.finish_section(report, "Throughput (exhaustive mix)", throughput_params);
+    report.sections.push(section);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -296,15 +308,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut runner = BenchRunner::new(&format!("Limit Order Book ({version}) \u{2014} Latency"))
         .warmup_iters(WARMUP_ITERS)
         .sample_iters(100_000)
-        .filter(args.filter.clone())
-        .param("book_levels", &NUM_LEVELS.to_string())
-        .param("orders_per_level", &ORDERS_PER_LEVEL.to_string())
-        .param(
-            "resting_orders",
-            &(NUM_LEVELS * ORDERS_PER_LEVEL * 2).to_string(),
-        )
-        .param("crowded_level_orders", &CROWDED_LEVEL_ORDERS.to_string())
-        .param("lob_version", version);
+        .filter(args.filter.clone());
 
     // TODO: add to params?
     runner.apply_core_pinning();

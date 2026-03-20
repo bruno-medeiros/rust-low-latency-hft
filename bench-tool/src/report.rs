@@ -23,12 +23,25 @@ pub struct BenchReportSection {
     pub scenarios: Vec<ScenarioResult>,
 }
 
+impl BenchReportSection {
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            params: BTreeMap::new(),
+            scenarios: Vec::new(),
+        }
+    }
+
+    pub fn add_param(&mut self, key: impl Into<String>, value: impl Into<String>) {
+        self.params.insert(key.into(), value.into());
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReportMetadata {
     pub title: String,
     pub timestamp: String,
     pub hardware: HardwareInfo,
-    pub settings: BenchSettings,
     pub rustc_version: String,
     /// Clock source used for latency measurements (e.g. "TSC (RDTSC via quanta)").
     #[serde(default)]
@@ -36,12 +49,6 @@ pub struct ReportMetadata {
     /// Note about CPU core pinning (e.g. "Thread pinned to core 2" or "No CPU pinning applied").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpu_pinning_note: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BenchSettings {
-    pub warmup_iters: u64,
-    pub sample_iters: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,13 +124,8 @@ pub struct AllocStats {
 }
 
 impl BenchReport {
-    /// Creates a report with metadata and empty sections. 
-    pub fn new_with_metadata(
-        title: String,
-        warmup_iters: u64,
-        sample_iters: u64,
-        pin_core: Option<usize>,
-    ) -> Self {
+    /// Creates a report with metadata and empty sections.
+    pub fn new_with_metadata(title: String, pin_core: Option<usize>) -> Self {
         let cpu_pinning_note = pin_core.map(|c| format!("Benchmark thread pinned to core {c}"));
 
         Self {
@@ -131,10 +133,6 @@ impl BenchReport {
                 title,
                 timestamp: Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string(),
                 hardware: HardwareInfo::detect(),
-                settings: BenchSettings {
-                    warmup_iters,
-                    sample_iters,
-                },
                 rustc_version: detect_rustc_version(),
                 clock_source: detect_clock_source(),
                 cpu_pinning_note,
@@ -143,23 +141,9 @@ impl BenchReport {
         }
     }
 
-    pub(crate) fn push_section(
-        &mut self,
-        title: String,
-        params: BTreeMap<String, String>,
-        scenarios: Vec<ScenarioResult>,
-    ) {
-        self.sections.push(BenchReportSection {
-            title,
-            params,
-            scenarios,
-        });
-    }
-
+    // REVIEW
     pub(crate) fn all_scenarios(&self) -> impl Iterator<Item = &ScenarioResult> {
-        self.sections
-            .iter()
-            .flat_map(|s| s.scenarios.iter())
+        self.sections.iter().flat_map(|s| s.scenarios.iter())
     }
 
     pub fn to_json_pretty(&self) -> String {
@@ -180,7 +164,11 @@ impl BenchReport {
     }
 }
 
-fn render_section_scenarios<R: Renderer>(out: &mut String, renderer: &R, scenarios: &[ScenarioResult]) {
+fn render_section_scenarios<R: Renderer>(
+    out: &mut String,
+    renderer: &R,
+    scenarios: &[ScenarioResult],
+) {
     let latency_headers = &[
         "Operation",
         "min",
@@ -300,15 +288,8 @@ impl BenchReport {
         if let Some(ref note) = m.cpu_pinning_note {
             props.push(("CPU pinning", note.clone()));
         }
-        props.push((
-            "Samples",
-            format!(
-                "{} (warmup: {})",
-                m.settings.sample_iters, m.settings.warmup_iters
-            ),
-        ));
 
-        renderer.render_heading(&mut out, 1, &format!("{} - Latency Report", m.title));
+        renderer.render_heading(&mut out, 1, &m.title);
         renderer.render_properties(&mut out, &props);
 
         for section in &self.sections {

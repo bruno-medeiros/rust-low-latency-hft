@@ -14,8 +14,8 @@ pub use format_unit::fmt_duration;
 pub use hardware::HardwareInfo;
 pub use renderer::{MarkdownRenderer, Renderer, TextRenderer};
 pub use report::{
-    AllocStats, BenchReport, BenchReportSection, BenchSettings, LatencyScenario, LatencyStats,
-    ReportMetadata, ScenarioResult, ThroughputScenario,
+    AllocStats, BenchReport, BenchReportSection, LatencyScenario, LatencyStats, ReportMetadata,
+    ScenarioResult, ThroughputScenario,
 };
 pub use runner::{BenchRunner, RunMode};
 
