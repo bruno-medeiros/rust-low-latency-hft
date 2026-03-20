@@ -20,12 +20,12 @@ Orders are pre-parsed from a LOBSTER message file (cold path), then replayed thr
 
 ## Benchmarks
 
-From the repository root, `./run-benchmarks-and-report.sh` runs the `lobster_pipeline` throughput benchmark and writes Markdown under [`bench-results/matching-pipeline/`](../bench-results/matching-pipeline/)
+From the repository root, `./run-benchmarks-and-report.sh` runs the `pipeline` throughput benchmark and writes [`report.md`](../bench-results/matching-pipeline/report.md).
 
 Ad hoc:
 
 ```bash
-cargo bench -p matching-pipeline --bench lobster_pipeline
+cargo bench -p matching-pipeline --bench pipeline
 ```
 
 ## Getting LOBSTER data

@@ -37,12 +37,12 @@ cargo flamegraph -p limit-order-book --bench lob \
 echo ""
 echo "=== Benchmark: matching-pipeline LOBSTER (throughput) ==="
 mkdir -p "$RESULTS_DIR/matching-pipeline"
-cargo bench -p matching-pipeline --bench lobster_pipeline -- \
-    --save-json "$RESULTS_DIR/matching-pipeline/lobster_pipeline.json" \
-    --save-md "$RESULTS_DIR/matching-pipeline/lobster_pipeline.md" \
+cargo bench -p matching-pipeline --bench pipeline -- \
+    --save-json "$RESULTS_DIR/matching-pipeline/pipeline.json" \
+    --save-md "$RESULTS_DIR/matching-pipeline/report.md" \
     --flamegraph
 
-cargo flamegraph -p matching-pipeline --bench lobster_pipeline \
+cargo flamegraph -p matching-pipeline --bench pipeline \
     -o "$RESULTS_DIR/matching-pipeline/flamegraph.svg" \
     -- --filter Pipeline
 
