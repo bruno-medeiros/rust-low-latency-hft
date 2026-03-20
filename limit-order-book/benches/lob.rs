@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::hint::black_box;
 
-use bench_tool::{BenchRunner, CliArgs};
+use bench_tool::{BenchReport, BenchRunner, CliArgs};
 use limit_order_book::types::Side;
 use limit_order_book::{CountingEventSink, LimitOrderBook, LimitOrderBookV0, LimitOrderBookV1};
 
@@ -11,6 +12,9 @@ const MID_PRICE: u64 = 10_000;
 /// Single price level with many resting orders; measures cancel cost vs queue position.
 const CROWDED_LEVEL_ORDERS: u64 = 500;
 
+/// Warm-up iterations per latency scenario before timed samples.
+const WARMUP_ITERS: u64 = 10_000;
+/// Timed samples per latency scenario.
 const BENCH_ITERS: u64 = 100_000;
 
 const PRICE_RANGE: (u64, u64) = (1, 20_000);
@@ -40,7 +44,7 @@ fn fill_crowded_sell(book: &mut impl LimitOrderBook) {
     }
 }
 
-fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
+fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut BenchReport) {
     let prefilled_book = |price_range, order_capacity| {
         let mut b = B::with_config(price_range, order_capacity);
         fill_book(&mut b);
@@ -185,7 +189,12 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
         BENCH_ITERS,
     );
 
-    // ── Throughput (sustained mix) ────────────────────────────────────────────
+    let mut latency_params = runner.params().clone();
+    latency_params.insert("BENCH_ITERS".into(), BENCH_ITERS.to_string());
+    latency_params.insert("WARMUP_ITERS".into(), WARMUP_ITERS.to_string());
+    runner.finish_section(report, "Latency", latency_params);
+
+    // ── Throughput (exhaustive mix) ─────────────────────────────────────────────
     // Realistic mix: passive adds (unfilled), aggressive adds (multiple fills), cancels, spread.
     // Per cycle: 20 passive buy, 20 passive sell, 8 aggressive buy (hit our sells), 20 cancel buy,
     // 8 cancel sell (remaining after match), 12 spread. Steady state: aggressors hit our passive
@@ -196,13 +205,15 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
     const SPREAD_PER_CYCLE: u64 = 12;
     const RESTING_QTY: u64 = 100;
     const AGGRESSIVE_QTY: u64 = 150; // > RESTING_QTY so each aggressor gets 2+ Fill events
+    const THROUGHPUT_OUTER_ITERS: u64 = 2_000_000;
 
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
         order_id_counter: u64,
     }
     let _state = runner.run_throughput(
-        "Throughput (sustained mix)",
+        "Throughput (exhaustive mix)",
+        // FIXME: above
         || ThroughputState {
             book: prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
             order_id_counter: OP_ORDER_ID_BASE,
@@ -271,8 +282,11 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner) {
             // Check steady order count.
             assert!(state.book.order_count() == initial_order_count);
         },
-        2_000_000,
+        THROUGHPUT_OUTER_ITERS,
     );
+
+    let throughput_params: BTreeMap<String, String> = runner.params().clone();
+    runner.finish_section(report, "Throughput (exhaustive mix)", throughput_params);
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -280,7 +294,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let version = &args.lob_version;
 
     let mut runner = BenchRunner::new(&format!("Limit Order Book ({version}) \u{2014} Latency"))
-        .warmup_iters(10_000)
+        .warmup_iters(WARMUP_ITERS)
         .sample_iters(100_000)
         .filter(args.filter.clone())
         .param("book_levels", &NUM_LEVELS.to_string())
@@ -290,18 +304,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &(NUM_LEVELS * ORDERS_PER_LEVEL * 2).to_string(),
         )
         .param("crowded_level_orders", &CROWDED_LEVEL_ORDERS.to_string())
-        .param("iters", &BENCH_ITERS.to_string())
         .param("lob_version", version);
 
     // TODO: add to params?
     runner.apply_core_pinning();
 
+    let mut report = runner.initial_report();
+
     match version.as_str() {
-        "v0" => run_benchmarks::<LimitOrderBookV0>(&mut runner),
-        "v1" => run_benchmarks::<LimitOrderBookV1>(&mut runner),
+        "v0" => run_benchmarks::<LimitOrderBookV0>(&mut runner, &mut report),
+        "v1" => run_benchmarks::<LimitOrderBookV1>(&mut runner, &mut report),
         _ => return Err(format!("unknown LOB version: {version}; expected v0 or v1").into()),
     }
 
-    let report = runner.finish();
     args.execute(&report)
 }

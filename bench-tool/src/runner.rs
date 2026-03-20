@@ -122,6 +122,29 @@ impl BenchRunner {
         self
     }
 
+    pub fn initial_report(&self) -> BenchReport {
+        BenchReport::new_with_metadata(
+            self.title.clone(),
+            self.warmup_iters,
+            self.sample_iters,
+            self.pin_core,
+        )
+    }
+
+    pub fn params(&self) -> &BTreeMap<String, String> {
+        &self.params
+    }
+
+    /// Append accumulated results as one report section and clear the accumulator.
+    pub fn finish_section(
+        &mut self,
+        report: &mut BenchReport,
+        section_title: impl Into<String>,
+        params: BTreeMap<String, String>,
+    ) {
+        report.push_section(section_title.into(), params, std::mem::take(&mut self.results));
+    }
+
     /// Run a scenario. `iters` is the number of iterations for both latency and throughput modes.
     pub fn run_latency<State, S, F>(&mut self, name: &str, setup: S, mut op: F, iters: u64)
     where
@@ -242,14 +265,7 @@ impl BenchRunner {
         state
     }
 
-    pub fn finish(self) -> BenchReport {
-        BenchReport::build(
-            self.title,
-            self.warmup_iters,
-            self.sample_iters,
-            self.params,
-            self.pin_core,
-            self.results,
-        )
+    pub fn finish(self, report: &mut BenchReport) {
+        report.push_section(self.title, self.params, self.results);
     }
 }

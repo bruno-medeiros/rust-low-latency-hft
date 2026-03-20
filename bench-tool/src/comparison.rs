@@ -201,10 +201,9 @@ impl BenchReport {
     pub fn compare(&self, baseline: &BenchReport) -> Comparison {
         let mut scenarios = Vec::new();
 
-        for current in &self.scenarios {
+        for current in self.all_scenarios() {
             let base = match baseline
-                .scenarios
-                .iter()
+                .all_scenarios()
                 .find(|s| s.name() == current.name())
             {
                 Some(b) => b,
