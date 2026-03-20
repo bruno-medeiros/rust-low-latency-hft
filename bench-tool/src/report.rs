@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use chrono::Utc;
 
+use crate::comparison::{compare_scenarios, render_scenario_comparison_tables};
 use crate::format_unit::{fmt_bytes_f64, fmt_duration_f64};
 use crate::hardware::{HardwareInfo, detect_clock_source, detect_rustc_version};
 use crate::{Renderer, fmt_duration};
@@ -141,11 +142,6 @@ impl BenchReport {
         }
     }
 
-    // REVIEW
-    pub(crate) fn all_scenarios(&self) -> impl Iterator<Item = &ScenarioResult> {
-        self.sections.iter().flat_map(|s| s.scenarios.iter())
-    }
-
     pub fn to_json_pretty(&self) -> String {
         serde_json::to_string_pretty(self).expect("failed to serialize report")
     }
@@ -177,6 +173,24 @@ fn render_section_scenarios<R: Renderer>(
         })
         .collect();
 
+    render_latency_scenarios(out, renderer, &latency);
+
+    let throughput: Vec<_> = scenarios
+        .iter()
+        .filter_map(|s| match s {
+            ScenarioResult::Throughput(t) => Some(t),
+            _ => None,
+        })
+        .collect();
+
+    render_throughput_scenarios(out, renderer, &throughput);
+}
+
+fn render_latency_scenarios<R: Renderer>(
+    out: &mut String,
+    renderer: &R,
+    latency: &Vec<&LatencyScenario>,
+) {
     if !latency.is_empty() {
         renderer.render_heading(out, 3, "Latency");
         let latency_headers = &[
@@ -195,7 +209,7 @@ fn render_section_scenarios<R: Renderer>(
             "bytes/op",
         ];
         renderer.render_table_start(out, latency_headers);
-        for ls in &latency {
+        for ls in latency {
             let cells = vec![
                 ls.name.clone(),
                 fmt_duration(ls.latency.min_ns),
@@ -214,15 +228,13 @@ fn render_section_scenarios<R: Renderer>(
             renderer.render_table_row(out, latency_headers, &cells);
         }
     }
+}
 
-    let throughput: Vec<_> = scenarios
-        .iter()
-        .filter_map(|s| match s {
-            ScenarioResult::Throughput(t) => Some(t),
-            _ => None,
-        })
-        .collect();
-
+fn render_throughput_scenarios<R: Renderer>(
+    out: &mut String,
+    renderer: &R,
+    throughput: &Vec<&ThroughputScenario>,
+) {
     if !throughput.is_empty() {
         let throughput_headers = &[
             "Scenario",
@@ -235,7 +247,7 @@ fn render_section_scenarios<R: Renderer>(
         ];
         renderer.render_heading(out, 3, "Throughput");
         renderer.render_table_start(out, throughput_headers);
-        for t in &throughput {
+        for t in throughput {
             let cells = vec![
                 t.name.clone(),
                 format!("{:.0}", t.throughput_ops_per_sec),
@@ -247,24 +259,21 @@ fn render_section_scenarios<R: Renderer>(
             ];
             renderer.render_table_row(out, throughput_headers, &cells);
         }
-        for t in &throughput {
+        for t in throughput {
             let ec = &t.event_counts;
-            let event_headers = &["Event type", "Count"];
-            renderer.render_heading(out, 5, &format!("{} — event counts", t.name));
+            let event_headers = &["Accepted", "Rejected", "Fill", "Filled", "Cancelled"];
             renderer.render_table_start(out, event_headers);
-            for (label, count) in [
-                ("Accepted", ec.accepted),
-                ("Rejected", ec.rejected),
-                ("Fill", ec.fill),
-                ("Filled", ec.filled),
-                ("Cancelled", ec.cancelled),
-            ] {
-                renderer.render_table_row(
-                    out,
-                    event_headers,
-                    &[label.to_string(), count.to_string()],
-                );
-            }
+            renderer.render_table_row(
+                out,
+                event_headers,
+                &[
+                    ec.accepted.to_string(),
+                    ec.rejected.to_string(),
+                    ec.fill.to_string(),
+                    ec.filled.to_string(),
+                    ec.cancelled.to_string(),
+                ],
+            );
         }
         renderer.render_heading(out, 5, "Throughput flamegraph");
         renderer.render_throughput_extra(out);
@@ -273,6 +282,16 @@ fn render_section_scenarios<R: Renderer>(
 
 impl BenchReport {
     pub fn render<R: Renderer>(&self, renderer: &R) -> String {
+        self.render_with_baseline(renderer, None)
+    }
+
+    /// Renders the report. When `baseline` is set, each section with a matching title in the
+    /// baseline report gets a **Comparison vs baseline** subsection after its scenario tables.
+    pub fn render_with_baseline<R: Renderer>(
+        &self,
+        renderer: &R,
+        baseline: Option<&BenchReport>,
+    ) -> String {
         let mut out = String::new();
         let m = &self.metadata;
 
@@ -289,6 +308,12 @@ impl BenchReport {
         if let Some(ref note) = m.cpu_pinning_note {
             props.push(("CPU pinning", note.clone()));
         }
+        if let Some(b) = baseline {
+            props.push((
+                "Baseline",
+                format!("\"{}\" ({})", b.metadata.title, b.metadata.timestamp),
+            ));
+        }
 
         renderer.render_heading(&mut out, 1, &m.title);
         renderer.render_properties(&mut out, &props);
@@ -303,6 +328,19 @@ impl BenchReport {
                 renderer.render_properties(&mut out, &section_props);
             }
             render_section_scenarios(&mut out, renderer, &section.scenarios);
+
+            if let Some(b_rep) = baseline
+                && let Some(base_section) = b_rep
+                    .sections
+                    .iter()
+                    .find(|s| s.title == section.title)
+            {
+                let cmp = compare_scenarios(&base_section.scenarios, &section.scenarios);
+                if !cmp.is_empty() {
+                    renderer.render_heading(&mut out, 3, "Comparison vs baseline");
+                    render_scenario_comparison_tables(&mut out, renderer, &cmp);
+                }
+            }
         }
 
         out.push('\n');
