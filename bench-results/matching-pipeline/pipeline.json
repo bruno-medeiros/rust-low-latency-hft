@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Matching pipeline",
-    "timestamp": "2026-03-20T19:15:29Z",
+    "timestamp": "2026-03-20T20:11:47Z",
     "hardware": {
       "cpu_model": "Apple M4 Pro",
       "cpu_cores": 12,
@@ -24,23 +24,23 @@
         {
           "name": "Pipeline (Lobster data)",
           "samples": 40,
-          "throughput_ops_per_sec": 13823307.540395375,
+          "throughput_ops_per_sec": 18421294.97214935,
           "allocations": {
-            "total_allocs": 681,
-            "total_deallocs": 680,
-            "total_bytes": 962227264,
-            "avg_allocs_per_op": 17.025,
-            "avg_deallocs_per_op": 17.0,
-            "avg_bytes_per_op": 24055681.6
+            "total_allocs": 12,
+            "total_deallocs": 0,
+            "total_bytes": 64,
+            "avg_allocs_per_op": 0.3,
+            "avg_deallocs_per_op": 0.0,
+            "avg_bytes_per_op": 1.6
           },
-          "setup_allocs": 0,
-          "setup_bytes": 0,
+          "setup_allocs": 11,
+          "setup_bytes": 22846016,
           "event_counts": {
-            "accepted": 974720,
-            "rejected": 203720,
-            "fill": 528800,
-            "filled": 545200,
-            "cancelled": 333440
+            "accepted": 961579,
+            "rejected": 224768,
+            "fill": 620090,
+            "filled": 633464,
+            "cancelled": 325533
           }
         }
       ]
