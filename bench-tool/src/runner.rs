@@ -1,5 +1,4 @@
 use std::alloc::System;
-use std::collections::BTreeMap;
 use std::hint::black_box;
 
 use core_affinity::CoreId;
@@ -57,7 +56,6 @@ pub struct BenchRunner {
     title: String,
     warmup_iters: u64,
     sample_iters: u64,
-    params: BTreeMap<String, String>,
     pin_core: Option<usize>,
     filter: Option<String>,
     results: Vec<ScenarioResult>,
@@ -66,12 +64,10 @@ pub struct BenchRunner {
 
 impl BenchRunner {
     pub fn new(title: &str) -> Self {
-        let params = BTreeMap::new();
         Self {
             title: title.to_string(),
             warmup_iters: 10_000,
             sample_iters: 100_000,
-            params,
             pin_core: None,
             filter: None,
             results: Vec::new(),
@@ -112,37 +108,13 @@ impl BenchRunner {
         self
     }
 
-    pub fn param(mut self, key: &str, value: &str) -> Self {
-        self.params.insert(key.to_string(), value.to_string());
-        self
-    }
-
     pub fn filter(mut self, filter: Option<String>) -> Self {
         self.filter = filter;
         self
     }
 
     pub fn initial_report(&self) -> BenchReport {
-        BenchReport::new_with_metadata(
-            self.title.clone(),
-            self.warmup_iters,
-            self.sample_iters,
-            self.pin_core,
-        )
-    }
-
-    pub fn params(&self) -> &BTreeMap<String, String> {
-        &self.params
-    }
-
-    /// Append accumulated results as one report section and clear the accumulator.
-    pub fn finish_section(
-        &mut self,
-        report: &mut BenchReport,
-        section_title: impl Into<String>,
-        params: BTreeMap<String, String>,
-    ) {
-        report.push_section(section_title.into(), params, std::mem::take(&mut self.results));
+        BenchReport::new_with_metadata(self.title.clone(), self.pin_core)
     }
 
     /// Run a scenario. `iters` is the number of iterations for both latency and throughput modes.
@@ -263,9 +235,5 @@ impl BenchRunner {
         eprintln!("done");
 
         state
-    }
-
-    pub fn finish(self, report: &mut BenchReport) {
-        report.push_section(self.title, self.params, self.results);
     }
 }

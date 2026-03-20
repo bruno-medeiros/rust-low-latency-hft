@@ -1,7 +1,7 @@
 //! End-to-end pipeline throughput on the LOBSTER GOOG sample (same file and config as
 //! `tests/lobster_goog.rs`).
 
-use bench_tool::{BenchRunner, CliArgs};
+use bench_tool::{BenchReportSection, BenchRunner, CliArgs};
 use limit_order_book::LimitOrderBookV1;
 use matching_pipeline::{Pipeline, PipelineConfig, test_data};
 
@@ -18,14 +18,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     const THROUGHPUT_ITERS: u64 = 40;
 
-    let mut runner = BenchRunner::new("Matching pipeline — LOBSTER GOOG throughput")
+    let mut runner = BenchRunner::new("Matching pipeline")
         .warmup_iters(2)
         .sample_iters(THROUGHPUT_ITERS)
-        .filter(args.filter.clone())
-        .param("sample", test_data::GOOG_SAMPLE_MESSAGE_REL_PATH)
-        .param("commands", &commands.len().to_string())
-        .param("queue_slots", &pipeline_config.queue_slots.to_string())
-        .param("throughput_op", "per replayed order command");
+        .filter(args.filter.clone());
 
     runner.apply_core_pinning();
 
@@ -50,6 +46,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         THROUGHPUT_ITERS,
     );
 
-    runner.finish(&mut report);
+    let mut section = BenchReportSection::new("YYY");
+
+    section.add_param("sample", test_data::GOOG_SAMPLE_MESSAGE_REL_PATH);
+    section.add_param("commands", commands.len().to_string());
+    section.add_param("queue_slots", pipeline_config.queue_slots.to_string());
+    section.add_param("throughput_op", "per replayed order command");
+
+    report.sections.push(section);
     args.execute(&report)
 }
