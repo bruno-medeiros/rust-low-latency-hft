@@ -41,45 +41,42 @@ pub struct PipelineResult {
 
 /// Two-thread matching-engine pipeline.
 pub struct Pipeline {
-    config: PipelineConfig,
+    pub done: Arc<AtomicBool>,
+    pub consumer_handle: thread::JoinHandle<PipelineResult>,
+    pub producer: lockfree_queue::spsc::SpscProducer<OrderCommand>,
 }
 
 impl Pipeline {
-    pub fn new(config: PipelineConfig) -> Self {
-        Self { config }
+    pub fn new<B: LimitOrderBook + Send + 'static>(config: PipelineConfig) -> Self {
+        let price_range = config.price_range;
+        let order_capacity = config.order_capacity;
+        let book = B::with_config(price_range, order_capacity);
+
+        let queue = SpscQueue::new(config.queue_slots).expect("invalid queue slot count");
+        let (producer, consumer) = queue.split();
+        let done = Arc::new(AtomicBool::new(false));
+
+        let done_rx = done.clone();
+        let consumer_handle =
+            thread::spawn(move || consumer::consume::<B>(consumer, done_rx, book));
+
+        Self {
+            done,
+            consumer_handle,
+            producer,
+        }
     }
 
-    /// Run the pipeline: spawn producer and consumer threads, push all commands
-    /// through the SPSC queue, match in the LOB, and return once both threads
-    /// have joined.
-    pub fn run<B: LimitOrderBook + Send + 'static>(
-        &self,
-        // REVIEW: take an iterator of OrderCommand
-        commands: Vec<OrderCommand>,
-    ) -> PipelineResult {
-        let queue = SpscQueue::new(self.config.queue_slots).expect("invalid queue slot count");
-        let (mut producer, consumer) = queue.split();
+    pub fn ingest_commands(&mut self, commands: &[OrderCommand]) {
+        for &cmd in commands {
+            self.producer.push_blocking(cmd);
+        }
+    }
 
-        let done = Arc::new(AtomicBool::new(false));
-        let done_rx = done.clone();
-
-        let price_range = self.config.price_range;
-        let order_capacity = self.config.order_capacity;
-
-        let consumer_handle = thread::spawn(move || {
-            let book = B::with_config(price_range, order_capacity);
-            consumer::consume::<B>(consumer, done_rx, book)
-        });
-
-        let producer_handle = thread::spawn(move || {
-            for cmd in commands {
-                producer.push_blocking(cmd);
-            }
-            done.store(true, Ordering::Release);
-        });
-
-        producer_handle.join().expect("producer thread panicked");
-        consumer_handle.join().expect("consumer thread panicked")
+    pub fn run_and_terminate(mut self, commands: &[OrderCommand]) -> PipelineResult {
+        self.ingest_commands(commands);
+        self.done.store(true, Ordering::Release);
+        self.consumer_handle.join().unwrap()
     }
 }
 
@@ -109,7 +106,7 @@ mod tests {
             },
         ];
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.commands_processed, 2);
         assert_eq!(result.events.accepted, 2);
@@ -137,7 +134,7 @@ mod tests {
             },
         ];
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.events.fill, 1);
         assert_eq!(result.events.filled, 1); // only the sell is fully filled
@@ -166,7 +163,7 @@ mod tests {
             OrderCommand::CancelOrder { order_id: 1 },
         ];
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.events.accepted, 2);
         assert_eq!(result.events.cancelled, 1);
@@ -180,7 +177,7 @@ mod tests {
     fn cancel_unknown_order_emits_reject() {
         let commands = vec![OrderCommand::CancelOrder { order_id: 999 }];
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.commands_processed, 1);
         assert_eq!(result.events.rejected, 1);
@@ -210,7 +207,7 @@ mod tests {
             },
         ];
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.events.fill, 2); // matches at price 100 and 101
         assert_eq!(result.events.filled, 2); // sell@100 fully filled, market order fully filled
@@ -244,7 +241,7 @@ mod tests {
             id += 1;
         }
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.commands_processed, 22);
         assert_eq!(result.events.accepted, 22);
@@ -270,13 +267,13 @@ mod tests {
         let rows = parser.parse_messages(csv).unwrap();
         let commands = parser.extract_commands(&rows);
 
-        let pipeline = Pipeline::new(PipelineConfig {
+        let pipeline = Pipeline::new::<LimitOrderBookV1>(PipelineConfig {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 100,
         });
 
-        let result = pipeline.run::<LimitOrderBookV1>(commands);
+        let result = pipeline.run_and_terminate(&commands);
 
         assert_eq!(result.final_best_bid, Some((5000, 100)));
         assert_eq!(result.final_best_ask, Some((5100, 100)));
@@ -290,7 +287,7 @@ mod tests {
 
     #[test]
     fn empty_command_list() {
-        let result = test_pipeline().run::<LimitOrderBookV1>(vec![]);
+        let result = test_pipeline().run_and_terminate(&Vec::new());
 
         assert_eq!(result.commands_processed, 0);
         assert_eq!(result.final_best_bid, None);
@@ -315,7 +312,7 @@ mod tests {
             },
         ];
 
-        let result = test_pipeline().run::<LimitOrderBookV1>(commands);
+        let result = test_pipeline().run_and_terminate(&commands);
 
         assert_eq!(result.events.accepted, 1);
         assert_eq!(result.events.rejected, 1);
@@ -323,7 +320,7 @@ mod tests {
     }
 
     fn test_pipeline() -> Pipeline {
-        Pipeline::new(PipelineConfig {
+        Pipeline::new::<LimitOrderBookV1>(PipelineConfig {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 1_000,

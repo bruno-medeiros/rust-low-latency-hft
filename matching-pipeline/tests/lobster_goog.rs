@@ -23,7 +23,7 @@ fn pipeline_completes_with_consistent_book() {
         order_capacity: 30_000,
     };
 
-    let result = Pipeline::new(config).run::<LimitOrderBookV1>(commands);
+    let result = Pipeline::new::<LimitOrderBookV1>(config).run_and_terminate(&commands);
 
     assert_eq!(result.commands_processed, num_commands);
     assert!(result.events.accepted > 0);

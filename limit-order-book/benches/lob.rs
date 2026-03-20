@@ -216,14 +216,18 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
         order_id_counter: u64,
+        sink: CountingEventSink,
     }
-    let _state = runner.run_throughput(
+    runner.run_throughput(
         "Throughput (realistic mix)",
         || ThroughputState {
             book: prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
             order_id_counter: OP_ORDER_ID_BASE,
+            sink: CountingEventSink::default(),
         },
-        |state, sink, op_count| {
+        |state| state.sink,
+        |state, op_count| {
+            let sink = &mut state.sink;
             let initial_order_count = state.book.order_count();
             let base_orders_to_cancel = state.order_id_counter;
             // Passive buy (rest at 5000..5019)
