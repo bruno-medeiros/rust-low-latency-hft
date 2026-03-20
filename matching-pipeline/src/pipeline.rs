@@ -10,6 +10,7 @@ use lockfree_queue::spsc::SpscQueue;
 use crate::command::OrderCommand;
 use crate::consumer;
 
+#[derive(Clone, Copy)]
 pub struct PipelineConfig {
     /// SPSC queue ring size (must be a power of two, ≥ 2).
     pub queue_slots: usize,

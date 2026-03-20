@@ -18,7 +18,7 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 
 ### [market-data-feed](market-data-feed/README.md)
 
-- ITCH-style binary market data feed handler.
+- ITCH-style binary market data feed parser.
 
 
 ## Additional Notes

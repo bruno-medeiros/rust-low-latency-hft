@@ -498,6 +498,7 @@ dependencies = [
 name = "matching-pipeline"
 version = "0.1.0"
 dependencies = [
+ "bench-tool",
  "limit-order-book",
  "lockfree-queue",
  "thiserror",

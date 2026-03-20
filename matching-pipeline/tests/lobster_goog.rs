@@ -2,21 +2,11 @@
 //! (GOOG 2012-06-21, level 1).
 
 use limit_order_book::LimitOrderBookV1;
-use matching_pipeline::{LobsterParser, Pipeline, PipelineConfig};
-
-const SAMPLE_FILE: &str = "LOBSTER_SampleFiles/GOOG_2012-06-21_34200000_57600000_message_1.csv";
-
-fn load_sample() -> String {
-    let path = format!("{}/{SAMPLE_FILE}", env!("CARGO_MANIFEST_DIR"));
-    std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {path}: {e}"))
-}
+use matching_pipeline::{Pipeline, PipelineConfig, test_data};
 
 #[test]
 fn extracts_expected_command_count() {
-    let csv = load_sample();
-    let parser = LobsterParser::new();
-    let rows = parser.parse_messages(&csv).unwrap();
-    let commands = parser.extract_commands(&rows);
+    let commands = test_data::goog_sample_commands();
 
     // type 1 (new order): 24 368 + type 3 (full cancel): 13 429
     assert_eq!(commands.len(), 37_797);
@@ -24,10 +14,7 @@ fn extracts_expected_command_count() {
 
 #[test]
 fn pipeline_completes_with_consistent_book() {
-    let csv = load_sample();
-    let parser = LobsterParser::new();
-    let rows = parser.parse_messages(&csv).unwrap();
-    let commands = parser.extract_commands(&rows);
+    let commands = test_data::goog_sample_commands().to_vec();
     let num_commands = commands.len() as u64;
 
     let config = PipelineConfig {
