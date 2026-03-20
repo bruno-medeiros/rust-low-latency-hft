@@ -27,7 +27,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .param("queue_slots", &pipeline_config.queue_slots.to_string())
         .param("throughput_op", "per replayed order command");
 
-    // FIXME: how about?
     runner.apply_core_pinning();
 
     runner.run_throughput(
@@ -36,7 +35,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         |_, sink, op_count| {
             let cmds = test_data::goog_sample_commands().to_vec();
             let n = cmds.len() as u64;
-            // REVIEW
             let result = Pipeline::new(pipeline_config).run::<LimitOrderBookV1>(cmds);
             sink.accepted += result.events.accepted;
             sink.rejected += result.events.rejected;

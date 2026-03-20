@@ -49,7 +49,7 @@ All three structures are pre-allocated at startup. The matching hot path perform
 
 ### Latency distribution and Throughput (sustained mix)
 
-Run benchmark suite with: limit order book v0 (baseline) and v1, produce report with comparison:
+Run the workspace benchmark suite from the **repository root**:
 
 ```bash
 ./run-benchmarks-and-report.sh
@@ -67,6 +67,6 @@ alongside results for reproducibility. Also adds a flamegraph to throughput scen
 
 
 ```bash
-cargo bench --bench lob_criterion
+cargo bench -p limit-order-book --bench lob_criterion
 ```
 

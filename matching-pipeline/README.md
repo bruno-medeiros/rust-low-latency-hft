@@ -18,6 +18,16 @@ Orders are pre-parsed from a LOBSTER message file (cold path), then replayed thr
 | `limit-order-book` | Matching engine (consumer thread) |
 | `lockfree-queue` | SPSC ring buffer connecting producer → consumer |
 
+## Benchmarks
+
+From the repository root, `./run-benchmarks-and-report.sh` runs the `lobster_pipeline` throughput benchmark and writes Markdown under [`bench-results/matching-pipeline/`](../bench-results/matching-pipeline/)
+
+Ad hoc:
+
+```bash
+cargo bench -p matching-pipeline --bench lobster_pipeline
+```
+
 ## Getting LOBSTER data
 
 LOBSTER provides free sample files derived from NASDAQ TotalView-ITCH data:

@@ -13,5 +13,5 @@ thiserror = { workspace = true }
 bench-tool = { workspace = true }
 
 [[bench]]
-name = "lobster_goog"
+name = "lobster_pipeline"
 harness = false
