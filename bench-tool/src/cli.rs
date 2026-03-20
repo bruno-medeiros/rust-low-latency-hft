@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::comparison::Comparison;
 use crate::renderer::{MarkdownRenderer, TextRenderer};
 use crate::report::BenchReport;
 
@@ -57,17 +56,7 @@ impl CliArgs {
         print!("{text}");
 
         if let Some(path) = &self.save_json {
-            let json = match &baseline_report {
-                Some(baseline) => {
-                    let cmp = report.compare(baseline);
-
-                    serde_json::to_string_pretty(&CombinedReport {
-                        report,
-                        comparison: &cmp,
-                    })?
-                }
-                None => report.to_json_pretty(),
-            };
+            let json = report.to_json_pretty();
             std::fs::write(path, json)?;
             eprintln!("JSON saved to {}", path.display());
         }
@@ -84,10 +73,4 @@ impl CliArgs {
 
         Ok(())
     }
-}
-
-#[derive(serde::Serialize)]
-struct CombinedReport<'a> {
-    report: &'a BenchReport,
-    comparison: &'a Comparison,
 }

@@ -118,7 +118,12 @@ impl BenchRunner {
     }
 
     pub fn push_section(&mut self, mut section: BenchReportSection, report: &mut BenchReport) {
-        section.scenarios.append(&mut self.results);
+        for r in self.results.drain(..) {
+            match r {
+                ScenarioResult::Latency(l) => section.latency_scenarios.push(l),
+                ScenarioResult::Throughput(t) => section.throughput_scenarios.push(t),
+            }
+        }
         report.sections.push(section);
     }
 

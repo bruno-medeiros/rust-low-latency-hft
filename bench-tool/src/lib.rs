@@ -7,9 +7,6 @@ mod report;
 mod runner;
 
 pub use cli::CliArgs;
-pub use comparison::{
-    AllocComparison, Comparison, LatencyComparison, MetricDelta, ScenarioComparison,
-};
 pub use format_unit::fmt_duration;
 pub use hardware::HardwareInfo;
 pub use renderer::{MarkdownRenderer, Renderer, TextRenderer};

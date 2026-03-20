@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 
 use chrono::Utc;
 
-use crate::comparison::{compare_scenarios, render_scenario_comparison_tables};
+use crate::comparison::{
+    compare_latency_scenarios, compare_throughput_scenarios, render_latency_comparison_embedded,
+    render_throughput_comparison_embedded,
+};
 use crate::format_unit::{fmt_bytes_f64, fmt_duration_f64};
 use crate::hardware::{HardwareInfo, detect_clock_source, detect_rustc_version};
 use crate::{Renderer, fmt_duration};
@@ -21,7 +24,10 @@ pub struct BenchReport {
 pub struct BenchReportSection {
     pub title: String,
     pub params: BTreeMap<String, String>,
-    pub scenarios: Vec<ScenarioResult>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub latency_scenarios: Vec<LatencyScenario>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub throughput_scenarios: Vec<ThroughputScenario>,
 }
 
 impl BenchReportSection {
@@ -29,7 +35,8 @@ impl BenchReportSection {
         Self {
             title: title.into(),
             params: BTreeMap::new(),
-            scenarios: Vec::new(),
+            latency_scenarios: Vec::new(),
+            throughput_scenarios: Vec::new(),
         }
     }
 
@@ -163,35 +170,22 @@ impl BenchReport {
 fn render_section_scenarios<R: Renderer>(
     out: &mut String,
     renderer: &R,
-    scenarios: &[ScenarioResult],
+    latency: &[LatencyScenario],
+    throughput: &[ThroughputScenario],
+    baseline_latency: Option<&[LatencyScenario]>,
+    baseline_throughput: Option<&[ThroughputScenario]>,
 ) {
-    let latency: Vec<_> = scenarios
-        .iter()
-        .filter_map(|s| match s {
-            ScenarioResult::Latency(l) => Some(l),
-            _ => None,
-        })
-        .collect();
-
-    render_latency_scenarios(out, renderer, &latency);
-
-    let throughput: Vec<_> = scenarios
-        .iter()
-        .filter_map(|s| match s {
-            ScenarioResult::Throughput(t) => Some(t),
-            _ => None,
-        })
-        .collect();
-
-    render_throughput_scenarios(out, renderer, &throughput);
+    render_latency_scenarios(out, renderer, latency, baseline_latency);
+    render_throughput_scenarios(out, renderer, throughput, baseline_throughput);
 }
 
 fn render_latency_scenarios<R: Renderer>(
     out: &mut String,
     renderer: &R,
-    latency: &Vec<&LatencyScenario>,
+    current: &[LatencyScenario],
+    baseline: Option<&[LatencyScenario]>,
 ) {
-    if !latency.is_empty() {
+    if !current.is_empty() {
         renderer.render_heading(out, 3, "Latency");
         let latency_headers = &[
             "Operation",
@@ -209,7 +203,7 @@ fn render_latency_scenarios<R: Renderer>(
             "bytes/op",
         ];
         renderer.render_table_start(out, latency_headers);
-        for ls in latency {
+        for ls in current {
             let cells = vec![
                 ls.name.clone(),
                 fmt_duration(ls.latency.min_ns),
@@ -227,15 +221,23 @@ fn render_latency_scenarios<R: Renderer>(
             ];
             renderer.render_table_row(out, latency_headers, &cells);
         }
+
+        if let Some(b) = baseline {
+            let cmp = compare_latency_scenarios(b, current);
+            render_latency_comparison_embedded(out, renderer, &cmp);
+        }
     }
 }
 
 fn render_throughput_scenarios<R: Renderer>(
     out: &mut String,
     renderer: &R,
-    throughput: &Vec<&ThroughputScenario>,
+    current: &[ThroughputScenario],
+    baseline: Option<&[ThroughputScenario]>,
 ) {
-    if !throughput.is_empty() {
+    if !current.is_empty() {
+        renderer.render_heading(out, 3, "Throughput");
+
         let throughput_headers = &[
             "Scenario",
             "ops/sec",
@@ -245,9 +247,8 @@ fn render_throughput_scenarios<R: Renderer>(
             "setup allocs",
             "setup bytes",
         ];
-        renderer.render_heading(out, 3, "Throughput");
         renderer.render_table_start(out, throughput_headers);
-        for t in throughput {
+        for t in current {
             let cells = vec![
                 t.name.clone(),
                 format!("{:.0}", t.throughput_ops_per_sec),
@@ -259,14 +260,30 @@ fn render_throughput_scenarios<R: Renderer>(
             ];
             renderer.render_table_row(out, throughput_headers, &cells);
         }
-        for t in throughput {
+
+        if let Some(b) = baseline {
+            let cmp = compare_throughput_scenarios(b, current);
+            render_throughput_comparison_embedded(out, renderer, &cmp);
+        }
+
+        out.push('\n');
+
+        for t in current {
             let ec = &t.event_counts;
-            let event_headers = &["Accepted", "Rejected", "Fill", "Filled", "Cancelled"];
+            let event_headers = &[
+                "Scenario",
+                "Accepted",
+                "Rejected",
+                "Fill",
+                "Filled",
+                "Cancelled",
+            ];
             renderer.render_table_start(out, event_headers);
             renderer.render_table_row(
                 out,
                 event_headers,
                 &[
+                    t.name.clone(),
                     ec.accepted.to_string(),
                     ec.rejected.to_string(),
                     ec.fill.to_string(),
@@ -275,6 +292,7 @@ fn render_throughput_scenarios<R: Renderer>(
                 ],
             );
         }
+
         renderer.render_heading(out, 5, "Throughput flamegraph");
         renderer.render_throughput_extra(out);
     }
@@ -285,8 +303,8 @@ impl BenchReport {
         self.render_with_baseline(renderer, None)
     }
 
-    /// Renders the report. When `baseline` is set, each section with a matching title in the
-    /// baseline report gets a **Comparison vs baseline** subsection after its scenario tables.
+    /// Renders the report. When `baseline` is set, each section with a matching title gets
+    /// **#### vs baseline** delta tables immediately under ### Latency and ### Throughput.
     pub fn render_with_baseline<R: Renderer>(
         &self,
         renderer: &R,
@@ -327,20 +345,20 @@ impl BenchReport {
             if !section_props.is_empty() {
                 renderer.render_properties(&mut out, &section_props);
             }
-            render_section_scenarios(&mut out, renderer, &section.scenarios);
 
-            if let Some(b_rep) = baseline
-                && let Some(base_section) = b_rep
-                    .sections
-                    .iter()
-                    .find(|s| s.title == section.title)
-            {
-                let cmp = compare_scenarios(&base_section.scenarios, &section.scenarios);
-                if !cmp.is_empty() {
-                    renderer.render_heading(&mut out, 3, "Comparison vs baseline");
-                    render_scenario_comparison_tables(&mut out, renderer, &cmp);
-                }
-            }
+            let baseline_section =
+                baseline.and_then(|b_rep| b_rep.sections.iter().find(|s| s.title == section.title));
+            let baseline_latency = baseline_section.map(|s| s.latency_scenarios.as_slice());
+            let baseline_throughput = baseline_section.map(|s| s.throughput_scenarios.as_slice());
+
+            render_section_scenarios(
+                &mut out,
+                renderer,
+                &section.latency_scenarios,
+                &section.throughput_scenarios,
+                baseline_latency,
+                baseline_throughput,
+            );
         }
 
         out.push('\n');
