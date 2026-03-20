@@ -1,6 +1,4 @@
-# Benchmark Methodology
-
-Note: I only have access to an Apple Silicon / ARM machine. So for benchmarks, timing tuning is focused on Mac, even if it's not as precise as x86_64/Linux.
+ # Benchmark Methodology
 
 ## Timing methodology
 
@@ -18,6 +16,12 @@ The benchmark tooling uses the [`quanta`](https://docs.rs/quanta) crate for high
 - **Allocation tracking** — heap allocations are tracked per-operation to verify zero-allocation hot paths.
 - **Warm-up phase** — a configurable warm-up period ensures instruction and data caches are hot before measurement begins.
 - **`black_box`** — prevents the compiler from optimizing away the measured operations.
+
+# OS settings
+
+## Linux settings
+
+TODO
 
 ## macOS tuning for benchmarks
 
