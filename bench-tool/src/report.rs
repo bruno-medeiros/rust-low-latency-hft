@@ -169,22 +169,6 @@ fn render_section_scenarios<R: Renderer>(
     renderer: &R,
     scenarios: &[ScenarioResult],
 ) {
-    let latency_headers = &[
-        "Operation",
-        "min",
-        "p50",
-        "p90",
-        "p95",
-        "p99",
-        "p99.9",
-        "max",
-        "mean",
-        "stdev",
-        "allocs/op",
-        "deallocs/op",
-        "bytes/op",
-    ];
-
     let latency: Vec<_> = scenarios
         .iter()
         .filter_map(|s| match s {
@@ -193,25 +177,42 @@ fn render_section_scenarios<R: Renderer>(
         })
         .collect();
 
-    renderer.render_heading(out, 3, "Results");
-    renderer.render_table_start(out, latency_headers);
-    for ls in &latency {
-        let cells = vec![
-            ls.name.clone(),
-            fmt_duration(ls.latency.min_ns),
-            fmt_duration(ls.latency.p50_ns),
-            fmt_duration(ls.latency.p90_ns),
-            fmt_duration(ls.latency.p95_ns),
-            fmt_duration(ls.latency.p99_ns),
-            fmt_duration(ls.latency.p999_ns),
-            fmt_duration(ls.latency.max_ns),
-            fmt_duration_f64(ls.latency.mean_ns),
-            fmt_duration_f64(ls.latency.stdev_ns),
-            format!("{:.1}", ls.allocations.avg_allocs_per_op),
-            format!("{:.1}", ls.allocations.avg_deallocs_per_op),
-            fmt_bytes_f64(ls.allocations.avg_bytes_per_op),
+    if !latency.is_empty() {
+        renderer.render_heading(out, 3, "Latency");
+        let latency_headers = &[
+            "Operation",
+            "min",
+            "p50",
+            "p90",
+            "p95",
+            "p99",
+            "p99.9",
+            "max",
+            "mean",
+            "stdev",
+            "allocs/op",
+            "deallocs/op",
+            "bytes/op",
         ];
-        renderer.render_table_row(out, latency_headers, &cells);
+        renderer.render_table_start(out, latency_headers);
+        for ls in &latency {
+            let cells = vec![
+                ls.name.clone(),
+                fmt_duration(ls.latency.min_ns),
+                fmt_duration(ls.latency.p50_ns),
+                fmt_duration(ls.latency.p90_ns),
+                fmt_duration(ls.latency.p95_ns),
+                fmt_duration(ls.latency.p99_ns),
+                fmt_duration(ls.latency.p999_ns),
+                fmt_duration(ls.latency.max_ns),
+                fmt_duration_f64(ls.latency.mean_ns),
+                fmt_duration_f64(ls.latency.stdev_ns),
+                format!("{:.1}", ls.allocations.avg_allocs_per_op),
+                format!("{:.1}", ls.allocations.avg_deallocs_per_op),
+                fmt_bytes_f64(ls.allocations.avg_bytes_per_op),
+            ];
+            renderer.render_table_row(out, latency_headers, &cells);
+        }
     }
 
     let throughput: Vec<_> = scenarios
@@ -232,7 +233,7 @@ fn render_section_scenarios<R: Renderer>(
             "setup allocs",
             "setup bytes",
         ];
-        renderer.render_heading(out, 4, "Throughput");
+        renderer.render_heading(out, 3, "Throughput");
         renderer.render_table_start(out, throughput_headers);
         for t in &throughput {
             let cells = vec![

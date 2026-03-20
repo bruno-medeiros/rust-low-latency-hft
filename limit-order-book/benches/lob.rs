@@ -56,16 +56,10 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
     };
 
     let mut section = BenchReportSection::new("Latency");
-    section.add_param("BENCH_ITERS", BENCH_ITERS.to_string());
-    section.add_param("WARMUP_ITERS", WARMUP_ITERS.to_string());
-
     section.add_param("book_levels", NUM_LEVELS.to_string());
     section.add_param("orders_per_level", ORDERS_PER_LEVEL.to_string());
-    section.add_param(
-        "resting_orders",
-        (NUM_LEVELS * ORDERS_PER_LEVEL * 2).to_string(),
-    );
-    section.add_param("crowded_level_orders", CROWDED_LEVEL_ORDERS.to_string());
+    section.add_param("BENCH_ITERS", BENCH_ITERS.to_string());
+    section.add_param("WARMUP_ITERS", WARMUP_ITERS.to_string());
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -200,7 +194,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         BENCH_ITERS,
     );
 
-    report.sections.push(section);
+    runner.push_section(section, report);
 
     // ── Throughput (realistic mix) ─────────────────────────────────────────────
     // Realistic mix: passive adds (unfilled), aggressive adds (multiple fills), cancels, spread.
@@ -215,18 +209,16 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
     const AGGRESSIVE_QTY: u64 = 150; // > RESTING_QTY so each aggressor gets 2+ Fill events
     const THROUGHPUT_OUTER_ITERS: u64 = 2_000_000;
 
-    let section = BenchReportSection::new("Throughput (realistic mix)");
-
-    // FIXME: add common params.
-    //section
+    let mut section = BenchReportSection::new("Throughput (realistic mix)");
+    section.add_param("book_levels", NUM_LEVELS.to_string());
+    section.add_param("orders_per_level", ORDERS_PER_LEVEL.to_string());
 
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
         order_id_counter: u64,
     }
     let _state = runner.run_throughput(
-        "Throughput (exhaustive mix)",
-        // FIXME: above
+        "Throughput (realistic mix)",
         || ThroughputState {
             book: prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
             order_id_counter: OP_ORDER_ID_BASE,
@@ -298,10 +290,15 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         THROUGHPUT_OUTER_ITERS,
     );
 
-    report.sections.push(section);
+    runner.push_section(section, report);
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    inner_main()
+        .inspect_err(|e| eprintln!("Error: {e} {e:?}"))
+        .unwrap();
+}
+fn inner_main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArgs::parse_args();
     let version = &args.lob_version;
 

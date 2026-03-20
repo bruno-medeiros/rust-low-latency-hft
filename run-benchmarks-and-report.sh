@@ -4,8 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-RESULTS_DIR="bench-results"
+RESULTS_DIR="$SCRIPT_DIR/bench-results"
 mkdir -p "$RESULTS_DIR"
+
+echo "Results dir: $RESULTS_DIR"
 
 # ── Limit order book benchmarks ───────────────────────────────────────────────
 
