@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut report = runner.initial_report();
 
     runner.run_throughput(
-        "Pipeline replay (commands/s)",
+        "Pipeline (Lobster data)",
         // FIXME
         || (),
         |_, sink, op_count| {
@@ -46,13 +46,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         THROUGHPUT_ITERS,
     );
 
-    let mut section = BenchReportSection::new("YYY");
+    let mut section = BenchReportSection::new("");
 
     section.add_param("sample", test_data::GOOG_SAMPLE_MESSAGE_REL_PATH);
-    section.add_param("commands", commands.len().to_string());
     section.add_param("queue_slots", pipeline_config.queue_slots.to_string());
-    section.add_param("throughput_op", "per replayed order command");
 
-    report.sections.push(section);
+    runner.push_section(section, &mut report);
     args.execute(&report)
 }

@@ -97,16 +97,6 @@ impl Comparison {
             )],
         );
 
-        let latency_headers = &[
-            "Operation",
-            "p50",
-            "p99",
-            "p99.9",
-            "mean",
-            "allocs/op",
-            "deallocs/op",
-            "bytes/op",
-        ];
         let latency_scenarios: Vec<_> = self
             .scenarios
             .iter()
@@ -120,19 +110,32 @@ impl Comparison {
             })
             .collect();
 
-        renderer.render_table_start(&mut out, latency_headers);
-        for (name, latency, allocations) in latency_scenarios {
-            let cells = vec![
-                name.clone(),
-                fmt_delta_duration(&latency.p50),
-                fmt_delta_duration(&latency.p99),
-                fmt_delta_duration(&latency.p999),
-                fmt_delta_duration(&latency.mean),
-                fmt_delta_count(&allocations.avg_allocs_per_op),
-                fmt_delta_count(&allocations.avg_deallocs_per_op),
-                fmt_delta_bytes(&allocations.avg_bytes_per_op),
+        if !latency_scenarios.is_empty() {
+            let latency_headers = &[
+                "Operation",
+                "p50",
+                "p99",
+                "p99.9",
+                "mean",
+                "allocs/op",
+                "deallocs/op",
+                "bytes/op",
             ];
-            renderer.render_table_row(&mut out, latency_headers, &cells);
+
+            renderer.render_table_start(&mut out, latency_headers);
+            for (name, latency, allocations) in latency_scenarios {
+                let cells = vec![
+                    name.clone(),
+                    fmt_delta_duration(&latency.p50),
+                    fmt_delta_duration(&latency.p99),
+                    fmt_delta_duration(&latency.p999),
+                    fmt_delta_duration(&latency.mean),
+                    fmt_delta_count(&allocations.avg_allocs_per_op),
+                    fmt_delta_count(&allocations.avg_deallocs_per_op),
+                    fmt_delta_bytes(&allocations.avg_bytes_per_op),
+                ];
+                renderer.render_table_row(&mut out, latency_headers, &cells);
+            }
         }
 
         let throughput_headers = &[

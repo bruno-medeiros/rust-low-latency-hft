@@ -6,11 +6,11 @@ use hdrhistogram::Histogram;
 use quanta::Clock;
 use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
-use limit_order_book::CountingEventSink;
-
+use crate::BenchReportSection;
 use crate::report::{
     AllocStats, BenchReport, LatencyScenario, LatencyStats, ScenarioResult, ThroughputScenario,
 };
+use limit_order_book::CountingEventSink;
 
 fn histogram_to_latency_stats(hist: &Histogram<u64>) -> LatencyStats {
     LatencyStats {
@@ -115,6 +115,11 @@ impl BenchRunner {
 
     pub fn initial_report(&self) -> BenchReport {
         BenchReport::new_with_metadata(self.title.clone(), self.pin_core)
+    }
+
+    pub fn push_section(&mut self, mut section: BenchReportSection, report: &mut BenchReport) {
+        section.scenarios.append(&mut self.results);
+        report.sections.push(section);
     }
 
     /// Run a scenario. `iters` is the number of iterations for both latency and throughput modes.
