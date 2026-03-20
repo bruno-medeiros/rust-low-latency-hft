@@ -45,26 +45,27 @@ impl CliArgs {
     }
 
     pub fn execute(&self, report: &BenchReport) -> Result<(), Box<dyn std::error::Error>> {
-        let comparison = match &self.baseline {
+        let baseline_report = match &self.baseline {
             Some(path) => {
                 let baseline = BenchReport::load_json(path)?;
-                Some(report.compare(&baseline))
+                Some(baseline)
             }
             None => None,
         };
 
-        let mut text = report.render(&TextRenderer);
-        if let Some(cmp) = &comparison {
-            text.push_str(&cmp.render(&TextRenderer));
-        }
+        let text = report.render_with_baseline(&TextRenderer, baseline_report.as_ref());
         print!("{text}");
 
         if let Some(path) = &self.save_json {
-            let json = match &comparison {
-                Some(cmp) => serde_json::to_string_pretty(&CombinedReport {
-                    report,
-                    comparison: cmp,
-                })?,
+            let json = match &baseline_report {
+                Some(baseline) => {
+                    let cmp = report.compare(baseline);
+
+                    serde_json::to_string_pretty(&CombinedReport {
+                        report,
+                        comparison: &cmp,
+                    })?
+                }
                 None => report.to_json_pretty(),
             };
             std::fs::write(path, json)?;
@@ -76,10 +77,7 @@ impl CliArgs {
                 None => MarkdownRenderer::new(),
                 Some(p) => MarkdownRenderer::with_flamegraph(p.clone()),
             };
-            let mut md = report.render(&renderer);
-            if let Some(cmp) = &comparison {
-                md.push_str(&cmp.render(&renderer));
-            }
+            let md = report.render_with_baseline(&renderer, baseline_report.as_ref());
             std::fs::write(path, md)?;
             eprintln!("Markdown saved to {}", path.display());
         }
