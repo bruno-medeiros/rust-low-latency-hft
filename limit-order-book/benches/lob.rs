@@ -302,7 +302,7 @@ fn inner_main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArgs::parse_args();
     let version = &args.lob_version;
 
-    let mut runner = BenchRunner::new(&format!("Limit Order Book ({version}) \u{2014} Latency"))
+    let mut runner = BenchRunner::new(&format!("Limit Order Book ({version})"))
         .warmup_iters(WARMUP_ITERS)
         .sample_iters(100_000)
         .filter(args.filter.clone());

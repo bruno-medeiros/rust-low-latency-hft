@@ -1,9 +1,9 @@
 
-# Limit Order Book (v1) — Latency - Latency Report
+# Limit Order Book (v1)
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-03-16T22:49:59Z |
+| Timestamp | 2026-03-20T19:14:04Z |
 | CPU | Apple M4 Pro |
 | Cores | 12 |
 | Memory | 24.0 GB |
@@ -11,70 +11,70 @@
 | Host | Mac.mynet |
 | Rust | rustc 1.91.1 (ed61e7d7e 2025-11-07) |
 | Clock | OS clock (platform fallback via quanta) |
-| Samples | 100000 (warmup: 10000) |
-| book_levels | 100 |
-| crowded_level_orders | 500 |
-| iters | 100000 |
-| lob_version | v1 |
-| orders_per_level | 10 |
-| resting_orders | 2000 |
+| Baseline | "Limit Order Book (v0)" (2026-03-20T19:12:26Z) |
 
-## Results
+## Latency
+
+| Property | Value |
+|----------|-------|
+| BENCH_ITERS | 100000 |
+| WARMUP_ITERS | 10000 |
+| book_levels | 100 |
+| orders_per_level | 10 |
+
+### Latency
 
 | Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Add (passive) | 1ns | 1ns | 1ns | 42ns | 42ns | 42ns | 459ns | 5ns | 12ns | 0.0 | 0.0 | 0B |
-| Add (sweep 5 levels, 50 fills) | 208ns | 333ns | 375ns | 375ns | 417ns | 500ns | 18.3μs | 332ns | 81ns | 0.0 | 0.0 | 0B |
-| Market (sweep 10 levels, 100 fills) | 416ns | 625ns | 708ns | 709ns | 791ns | 917ns | 14.9μs | 615ns | 107ns | 0.0 | 0.0 | 0B |
-| Cancel (head of queue) | 1ns | 1ns | 1ns | 42ns | 42ns | 42ns | 542ns | 5ns | 12ns | 0.0 | 0.0 | 0B |
-| Cancel (tail of queue) | 1ns | 1ns | 41ns | 42ns | 42ns | 42ns | 292ns | 5ns | 12ns | 0.0 | 0.0 | 0B |
-| Spread (BBO query) | 1ns | 1ns | 1ns | 1ns | 42ns | 42ns | 125ns | 2ns | 6ns | 0.0 | 0.0 | 0B |
-| Depth (top 5) | 1ns | 42ns | 83ns | 84ns | 84ns | 143ns | 11.6μs | 49ns | 73ns | 2.0 | 1.0 | 128B |
-| Order lookup (hit) | 1ns | 1ns | 1ns | 1ns | 41ns | 42ns | 6.8μs | 1ns | 22ns | 0.0 | 0.0 | 0B |
-| Realistic mix (per-op) | 1ns | 1ns | 42ns | 42ns | 42ns | 59ns | 666ns | 16ns | 20ns | 0.0 | 0.0 | 0B |
+| Add (passive) | 1ns | 41ns | 42ns | 42ns | 42ns | 166ns | 8.3μs | 26ns | 38ns | 0.0 | 0.0 | 0B |
+| Add (sweep 5 levels, 50 fills) | 392ns | 500ns | 542ns | 584ns | 708ns | 2.3μs | 37.9μs | 498ns | 234ns | 0.0 | 0.0 | 0B |
+| Market (sweep 10 levels, 100 fills) | 808ns | 917ns | 1.0μs | 1.1μs | 1.3μs | 4.0μs | 43.2μs | 966ns | 325ns | 0.0 | 0.0 | 0B |
+| Cancel (head of queue) | 1ns | 1ns | 42ns | 42ns | 42ns | 125ns | 7.6μs | 12ns | 38ns | 0.0 | 0.0 | 0B |
+| Cancel (tail of queue) | 1ns | 1ns | 42ns | 42ns | 42ns | 83ns | 684ns | 10ns | 18ns | 0.0 | 0.0 | 0B |
+| Spread (BBO query) | 1ns | 1ns | 1ns | 1ns | 42ns | 42ns | 500ns | 2ns | 7ns | 0.0 | 0.0 | 0B |
+| Depth (top 5) | 1ns | 42ns | 84ns | 84ns | 125ns | 667ns | 15.8μs | 57ns | 81ns | 2.0 | 1.0 | 128B |
+| Order lookup (hit) | 1ns | 1ns | 1ns | 42ns | 42ns | 42ns | 292ns | 4ns | 11ns | 0.0 | 0.0 | 0B |
+| Realistic mix (per-op) | 1ns | 41ns | 42ns | 83ns | 84ns | 333ns | 27.3μs | 31ns | 98ns | 0.0 | 0.0 | 0B |
+
+#### vs baseline
+
+| Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |
+|-----------|-----|-----|-------|------|-----------|-------------|----------|
+| Add (passive) | 41ns (↓2.4%) | 42ns (↓50.0%) | 166ns (↑32.8%) | 26ns (↓33.9%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
+| Add (sweep 5 levels, 50 fills) | 500ns (↓55.6%) | 708ns (↓54.1%) | 2.3μs (↓53.4%) | 498ns (↓56.2%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
+| Market (sweep 10 levels, 100 fills) | 917ns (↓59.3%) | 1.3μs (↓52.9%) | 4.0μs (↑5.5%) | 966ns (↓56.9%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
+| Cancel (head of queue) | 1ns (↓97.6%) | 42ns (=) | 125ns (↑48.8%) | 12ns (↓57.7%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Cancel (tail of queue) | 1ns (↓99.4%) | 42ns (↓79.9%) | 83ns (↓66.8%) | 10ns (↓93.8%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Spread (BBO query) | 1ns (=) | 42ns (=) | 42ns (=) | 2ns (↓22.8%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Depth (top 5) | 42ns (=) | 125ns (↑48.8%) | 667ns (↑100.3%) | 57ns (↑60.0%) | 2.0 (↑100.0%) | 1.0 (=) | 128B (↑60.0%) |
+| Order lookup (hit) | 1ns (=) | 42ns (=) | 42ns (=) | 4ns (↓3.1%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Realistic mix (per-op) | 41ns (↓2.4%) | 84ns (=) | 333ns (↑100.6%) | 31ns (↓28.5%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
+
+## Throughput (realistic mix)
+
+| Property | Value |
+|----------|-------|
+| book_levels | 100 |
+| orders_per_level | 10 |
 
 ### Throughput
 
 | Scenario | ops/sec | allocs/op | deallocs/op | bytes/op | setup allocs | setup bytes |
 |----------|---------|-----------|-------------|----------|--------------|-------------|
-| Throughput (sustained mix) | 74158657 | 0.0 | 0.0 | 0B | 2 | 11445.0MiB |
+| Throughput (realistic mix) | 41136792 | 0.0 | 0.0 | 0B | 3 | 1.9MiB |
 
-#### Throughput (sustained mix) — event counts
-
-| Event type | Count |
-|------------|-------|
-| Accepted | 116000000 |
-| Rejected | 0 |
-| Fill | 32000000 |
-| Filled | 40000000 |
-| Cancelled | 76000000 |
-
-#### Throughput flamegraph
-
-![Flame graph](flamegraph.svg)
-
-
-
-## Comparison vs Baseline
-
-| Property | Value |
-|----------|-------|
-| Baseline | "Limit Order Book (v0) — Latency" (2026-03-16T22:49:00Z) |
-| Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |
-|-----------|-----|-----|-------|------|-----------|-------------|----------|
-| Add (passive) | 1ns (↓97.6%) | 42ns (↓50.0%) | 42ns (↓66.4%) | 5ns (↓86.7%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
-| Add (sweep 5 levels, 50 fills) | 333ns (↓70.4%) | 417ns (↓69.7%) | 500ns (↓68.4%) | 332ns (↓70.7%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
-| Market (sweep 10 levels, 100 fills) | 625ns (↓72.7%) | 791ns (↓71.7%) | 917ns (↓71.6%) | 615ns (↓73.0%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
-| Cancel (head of queue) | 1ns (↓97.6%) | 42ns (=) | 42ns (↓50.0%) | 5ns (↓84.6%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Cancel (tail of queue) | 1ns (↓99.4%) | 42ns (↓79.9%) | 42ns (↓83.2%) | 5ns (↓96.8%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Spread (BBO query) | 1ns (=) | 42ns (=) | 42ns (=) | 2ns (↓15.7%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Depth (top 5) | 42ns (↑2.4%) | 84ns (↑100.0%) | 143ns (↑70.2%) | 49ns (↑61.9%) | 2.0 (↑100.0%) | 1.0 (=) | 128B (↑60.0%) |
-| Order lookup (hit) | 1ns (=) | 41ns (↓2.4%) | 42ns (=) | 1ns (↓68.7%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Realistic mix (per-op) | 1ns (↓97.6%) | 42ns (↓50.0%) | 59ns (↓52.8%) | 16ns (↓60.0%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
-
-### Throughput
+#### vs baseline
 
 | Operation | ops/sec | allocs/op | deallocs/op | bytes/op | setup allocs | setup bytes |
 |-----------|---------|-----------|-------------|----------|--------------|-------------|
-| Throughput (sustained mix) | 74.2M (↑240.6%) | 0.0 (↓100.0%) | 0.0 (↓100.0%) | 0B (↓100.0%) | 2.0 (↓99.7%) | 11445.0MiB (↑2346238.8%) |
+| Throughput (realistic mix) | 41.1M (↑44.7%) | 0.0 (↓100.0%) | 0.0 (↓100.0%) | 0B (↓100.0%) | 3.0 (↓99.5%) | 1.9MiB (↑298.6%) |
+
+| Scenario | Accepted | Rejected | Fill | Filled | Cancelled |
+|----------|----------|----------|------|--------|-----------|
+| Throughput (realistic mix) | 116000000 | 0 | 32000000 | 40000000 | 76000000 |
+
+##### Throughput flamegraph
+
+![Flame graph](flamegraph.svg)
+
 
