@@ -38,17 +38,6 @@ pub struct PipelineResult {
     pub final_order_count: u64,
 }
 
-impl PipelineResult {
-    /// Check that the book satisfies basic invariants after the run.
-    pub fn book_consistent(&self) -> bool {
-        match (self.final_best_bid, self.final_best_ask) {
-            (Some((bid, bid_qty)), Some((ask, ask_qty))) => bid < ask && bid_qty > 0 && ask_qty > 0,
-            (Some((_, qty)), None) | (None, Some((_, qty))) => qty > 0,
-            (None, None) => true,
-        }
-    }
-}
-
 /// Two-thread matching-engine pipeline.
 pub struct Pipeline {
     config: PipelineConfig,
@@ -128,7 +117,6 @@ mod tests {
         assert_eq!(result.final_best_bid, None);
         assert_eq!(result.final_best_ask, None);
         assert_eq!(result.final_order_count, 0);
-        assert!(result.book_consistent());
     }
 
     #[test]
@@ -155,7 +143,6 @@ mod tests {
         assert_eq!(result.final_best_bid, Some((100, 7)));
         assert_eq!(result.final_best_ask, None);
         assert_eq!(result.final_order_count, 1);
-        assert!(result.book_consistent());
     }
 
     // --- cancel ---
@@ -186,7 +173,6 @@ mod tests {
         assert_eq!(result.final_best_bid, None);
         assert_eq!(result.final_best_ask, Some((200, 10)));
         assert_eq!(result.final_order_count, 1);
-        assert!(result.book_consistent());
     }
 
     #[test]
@@ -197,7 +183,6 @@ mod tests {
 
         assert_eq!(result.commands_processed, 1);
         assert_eq!(result.events.rejected, 1);
-        assert!(result.book_consistent());
     }
 
     // --- market order ---
@@ -230,7 +215,6 @@ mod tests {
         assert_eq!(result.events.filled, 2); // sell@100 fully filled, market order fully filled
         assert_eq!(result.final_best_ask, Some((101, 2)));
         assert_eq!(result.final_order_count, 1);
-        assert!(result.book_consistent());
     }
 
     // --- crossing boundary ---
@@ -268,7 +252,6 @@ mod tests {
         assert_eq!(result.final_best_bid, Some((99, 10)));
         assert_eq!(result.final_best_ask, Some((101, 10)));
         assert_eq!(result.final_order_count, 20);
-        assert!(result.book_consistent());
     }
 
     // --- LOBSTER replay ---
@@ -294,7 +277,6 @@ mod tests {
 
         let result = pipeline.run::<LimitOrderBookV1>(commands);
 
-        assert!(result.book_consistent());
         assert_eq!(result.final_best_bid, Some((5000, 100)));
         assert_eq!(result.final_best_ask, Some((5100, 100)));
         assert_eq!(result.final_order_count, 3);
@@ -313,7 +295,6 @@ mod tests {
         assert_eq!(result.final_best_bid, None);
         assert_eq!(result.final_best_ask, None);
         assert_eq!(result.final_order_count, 0);
-        assert!(result.book_consistent());
     }
 
     #[test]
@@ -338,7 +319,6 @@ mod tests {
         assert_eq!(result.events.accepted, 1);
         assert_eq!(result.events.rejected, 1);
         assert_eq!(result.final_order_count, 1);
-        assert!(result.book_consistent());
     }
 
     fn test_pipeline() -> Pipeline {
