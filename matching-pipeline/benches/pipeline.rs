@@ -7,8 +7,8 @@ use matching_pipeline::{Pipeline, PipelineConfig, test_data};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArgs::parse_args();
-    let commands = test_data::goog_sample_commands();
-    assert_eq!(commands.len(), 37_797);
+    let cmds = test_data::goog_sample_commands().to_vec();
+    assert_eq!(cmds.len(), 37_797);
 
     let pipeline_config = PipelineConfig {
         queue_slots: 4096,
@@ -29,19 +29,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     runner.run_throughput(
         "Pipeline (Lobster data)",
-        // FIXME
-        || (),
-        |_, sink, op_count| {
-            let cmds = test_data::goog_sample_commands().to_vec();
+        || Pipeline::new::<LimitOrderBookV1>(pipeline_config),
+        |pipeline| pipeline.run_and_terminate(&[]).events,
+        move |pipeline, op_count| {
             let n = cmds.len() as u64;
-            let result = Pipeline::new(pipeline_config).run::<LimitOrderBookV1>(cmds);
-            sink.accepted += result.events.accepted;
-            sink.rejected += result.events.rejected;
-            sink.fill += result.events.fill;
-            sink.filled += result.events.filled;
-            sink.cancelled += result.events.cancelled;
             *op_count += n;
-            std::hint::black_box(result);
+            #[allow(clippy::unit_arg)]
+            std::hint::black_box(pipeline.ingest_commands(&cmds));
         },
         THROUGHPUT_ITERS,
     );

@@ -1,16 +1,15 @@
 use std::alloc::System;
 use std::hint::black_box;
 
-use core_affinity::CoreId;
-use hdrhistogram::Histogram;
-use quanta::Clock;
-use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
-
 use crate::BenchReportSection;
 use crate::report::{
     AllocStats, BenchReport, LatencyScenario, LatencyStats, ScenarioResult, ThroughputScenario,
 };
+use core_affinity::CoreId;
+use hdrhistogram::Histogram;
 use limit_order_book::CountingEventSink;
+use quanta::Clock;
+use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
 fn histogram_to_latency_stats(hist: &Histogram<u64>) -> LatencyStats {
     LatencyStats {
@@ -185,28 +184,28 @@ impl BenchRunner {
         eprintln!("done");
     }
 
-    pub fn run_throughput<State, S, F>(
+    pub fn run_throughput<State, S, FSink, F>(
         &mut self,
         name: &str,
         setup: S,
+        sink_op: FSink,
         mut op: F,
         iters: u64,
-    ) -> State
-    where
+    ) where
         S: Fn() -> State,
-        F: FnMut(&mut State, &mut CountingEventSink, &mut u64),
+        FSink: Fn(State) -> CountingEventSink,
+        F: FnMut(&mut State, &mut u64),
     {
         if let Some(f) = &self.filter
             && !name.to_lowercase().contains(&f.to_lowercase())
         {
-            return setup();
+            return;
         }
 
         let allocator = GLOBAL;
 
         let region = Region::new(allocator);
         let mut state = setup();
-        let mut sink = CountingEventSink::default();
         let setup_stats = region.change();
         let setup_total_allocs = setup_stats.allocations as u64 + setup_stats.reallocations as u64;
         let setup_total_bytes = setup_stats.bytes_allocated as u64;
@@ -214,7 +213,7 @@ impl BenchRunner {
         let start = self.clock.raw();
         for _ in 0..iters {
             #[allow(clippy::unit_arg)]
-            black_box(op(&mut state, &mut sink, &mut op_count));
+            black_box(op(&mut state, &mut op_count));
         }
         let end = self.clock.raw();
         let total_ns = self.clock.delta_as_nanos(start, end);
@@ -231,6 +230,8 @@ impl BenchRunner {
             total_bytes, total_allocs, total_deallocs
         );
 
+        let sink = sink_op(state);
+
         self.results
             .push(ScenarioResult::Throughput(ThroughputScenario {
                 name: name.to_string(),
@@ -243,7 +244,5 @@ impl BenchRunner {
             }));
 
         eprintln!("done");
-
-        state
     }
 }
