@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774285208170,
+  "lastUpdate": 1774285209859,
   "repoUrl": "https://github.com/bruno-medeiros/rust-low-latency-hft",
   "entries": {
     "Rust benchmarks (throughput)": [
@@ -377,6 +377,82 @@ window.BENCHMARK_DATA = {
             "name": "cancel_order//tail/1000",
             "value": 502,
             "range": "± 23",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "bruno.medeiros@cryptio.co",
+            "name": "Bruno Medeiros"
+          },
+          "committer": {
+            "email": "bruno.medeiros@cryptio.co",
+            "name": "Bruno Medeiros"
+          },
+          "distinct": true,
+          "id": "7eab970dcc25141c0592212ad22a971a0ed07946",
+          "message": "remove caches",
+          "timestamp": "2026-03-23T16:41:00Z",
+          "tree_id": "6750e29e6a5e638033fabc2c9b9c2675238e22ee",
+          "url": "https://github.com/bruno-medeiros/rust-low-latency-hft/commit/7eab970dcc25141c0592212ad22a971a0ed07946"
+        },
+        "date": 1774285209210,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "add_limit_order/sweep_5_levels/10/50fills",
+            "value": 4983,
+            "range": "± 702",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "add_limit_order/sweep_5_levels/100/50fills",
+            "value": 9623,
+            "range": "± 341",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "add_limit_order/sweep_5_levels/1000/50fills",
+            "value": 63006,
+            "range": "± 2969",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cancel_order//head/100",
+            "value": 143,
+            "range": "± 55",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cancel_order//tail/100",
+            "value": 204,
+            "range": "± 14",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cancel_order//head/500",
+            "value": 161,
+            "range": "± 15",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cancel_order//tail/500",
+            "value": 338,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cancel_order//head/1000",
+            "value": 175,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "cancel_order//tail/1000",
+            "value": 522,
+            "range": "± 19",
             "unit": "ns/iter"
           }
         ]
