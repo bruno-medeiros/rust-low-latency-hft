@@ -1,0 +1,99 @@
+# Continuous benchmark tracking via https://github.com/benchmark-action/github-action-benchmark
+#
+# - Custom `harness = false` benches (bench-tool JSON): `github-action-json` → custom JSON tools.
+# - Criterion: `--output-format bencher` matches the action's `tool: cargo` parser (same `test …
+#   bench: … ns/iter` lines as nightly libtest `cargo bench`; see upstream rust.yml and extract.ts).
+#   https://github.com/benchmark-action/github-action-benchmark/blob/master/.github/workflows/rust.yml
+#
+# First-time setup: create an empty `gh-pages` branch (or let the action create data on first push
+# if your repo allows token pushes to that branch).
+
+name: Benchmark
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: benchmark-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Run benchmarks
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-ci
+          cargo bench -p limit-order-book --bench lob -- \
+            --lob-version v0 \
+            --save-json benchmark-ci/lob_v0.json
+          cargo bench -p limit-order-book --bench lob -- \
+            --lob-version v1 \
+            --save-json benchmark-ci/lob_v1.json
+          cargo bench -p matching-pipeline --bench pipeline -- \
+            --save-json benchmark-ci/pipeline.json
+
+      - name: Run Criterion bench (bencher output for tool cargo)
+        run: |
+          set -euo pipefail
+          cargo bench -p limit-order-book --bench lob_criterion -- \
+            --noplot \
+            --output-format bencher 2>&1 | tee benchmark-ci/criterion-cargo.txt
+
+      - name: Convert bench-tool JSON for github-action-benchmark
+        run: |
+          set -euo pipefail
+          cargo run -p bench-tool --locked --bin github-action-json -- \
+            --report "LOB v0" benchmark-ci/lob_v0.json \
+            --report "LOB v1" benchmark-ci/lob_v1.json \
+            --report "Pipeline" benchmark-ci/pipeline.json \
+            --out-latency benchmark-ci/github-latency.json \
+            --out-throughput benchmark-ci/github-throughput.json
+
+      - name: Store benchmark result (throughput)
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Rust benchmarks (throughput)
+          tool: customBiggerIsBetter
+          output-file-path: benchmark-ci/github-throughput.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          benchmark-data-dir-path: dev/bench
+          summary-always: true
+
+      - name: Store benchmark result (latency)
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Rust benchmarks (latency)
+          tool: customSmallerIsBetter
+          output-file-path: benchmark-ci/github-latency.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          benchmark-data-dir-path: dev/bench
+          summary-always: true
+
+      - name: Store benchmark result (Criterion, cargo parser)
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Rust benchmarks (Criterion / cargo)
+          tool: cargo
+          output-file-path: benchmark-ci/criterion-cargo.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+          benchmark-data-dir-path: dev/bench
+          summary-always: true

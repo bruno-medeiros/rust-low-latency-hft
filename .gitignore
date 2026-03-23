@@ -11,3 +11,6 @@ target/
 
 /target
 cargo-flamegraph.trace
+
+# Local / CI benchmark scratch (github-action-benchmark inputs)
+/benchmark-ci/
