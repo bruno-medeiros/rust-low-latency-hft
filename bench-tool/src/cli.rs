@@ -29,6 +29,10 @@ pub struct CliArgs {
     #[arg(long)]
     pub filter: Option<String>,
 
+    /// Pin the benchmark thread to this CPU core index (e.g. 2 for an isolated core).
+    #[arg(long, value_name = "CORE")]
+    pub pin_core: Option<usize>,
+
     /// LOB implementation version (e.g. v0, v1)
     #[arg(long, default_value = "v1")]
     pub lob_version: String,

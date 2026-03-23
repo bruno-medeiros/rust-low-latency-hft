@@ -111,6 +111,7 @@ dependencies = [
  "clap",
  "core_affinity",
  "hdrhistogram",
+ "libc",
  "limit-order-book",
  "quanta",
  "serde",

@@ -21,38 +21,30 @@ The benchmark tooling uses the [`quanta`](https://docs.rs/quanta) crate for high
 
 ## Linux settings
 
-TODO
+Linux is the target platform for production HFT systems and offers far more control over scheduling, interrupts, and memory than macOS.
 
-## macOS tuning for benchmarks
+**One-time setup (requires reboot):**
 
-macOS does not support CPU core pinning. However, there are OS-level settings that reduce background noise and improve measurement consistency.
+- **Isolate CPU cores** — `isolcpus=2,3 nohz_full=2,3 rcu_nocbs=2,3` in kernel boot parameters. Removes cores from the scheduler, disables timer ticks (tickless mode), and offloads RCU callbacks.
 
-**Before benchmarking:**
+**Runtime tuning (automated by `run-benchmarks-linux.sh`):**
+
+- **CPU frequency scaling** — lock governor to `performance`, disable turbo boost for stable clocks.
+- **SCHED_FIFO** — elevate benchmark process to real-time priority (`chrt -f 90`) to prevent preemption.
+- **Core pinning** — `bench-tool` pins the benchmark thread via `core_affinity::set_for_current` (`--pin-core` flag).
+- **`mlockall`** — `bench-tool` calls `mlockall(MCL_CURRENT | MCL_FUTURE)` automatically on Linux to prevent page faults.
+- **IRQ migration** — move hardware interrupts off the benchmark core.
+- **Disable ASLR** — eliminates jitter from address randomization on pointer-heavy data structures.
+- **Disable swap** — prevents page-out stalls.
+- **Drop filesystem caches** — ensures a clean baseline between runs.
 
 ```bash
-# Disable Spotlight indexing (causes background I/O and CPU spikes)
-sudo mdutil -a -i off
+# Apply tuning, run all benchmarks, then revert
+sudo ./run-benchmarks-linux.sh
 
-# Disable Timer Coalescing (macOS batches timers to save power, adding jitter)
-sudo sysctl -w kern.timer.coalescing_enabled=0
-
-# Prevent sleep and Power Nap during benchmark runs
-sudo pmset -a disablesleep 1
-sudo pmset -a powernap 0
+# Or revert manually at any time
+sudo ./run-benchmarks-linux-revert.sh
 ```
 
-Close all non-essential applications (browsers, Slack, Docker, etc.) to minimize contention for CPU time and memory bandwidth.
 
-**After benchmarking — restore normal settings:**
-
-```bash
-# Re-enable Spotlight indexing
-sudo mdutil -a -i on
-
-# Re-enable Timer Coalescing
-sudo sysctl -w kern.timer.coalescing_enabled=1
-
-# Re-enable sleep and Power Nap
-sudo pmset -a disablesleep 0
-sudo pmset -a powernap 1
 ```

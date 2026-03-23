@@ -26,6 +26,10 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 - ITCH-style binary market data feed parser.
 
 
+## TODO
+
+- Hugepage-backed allocation (`mmap` + `MAP_HUGETLB`) for the v1 dense price-level array to reduce TLB misses.
+
 ## Additional Notes
 
 See [Benchmark Methodology](Benchmark-Methodology.md) for timing methodology, measurement techniques, etc.

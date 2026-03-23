@@ -21,6 +21,7 @@ pub struct OrderSlot {
 
 /// An efficient PriceLevels data structure that preallocates
 /// a vec for a range of prices (ticks)
+// TODO: back with mmap(MAP_HUGETLB) on Linux to reduce TLB misses on the dense price array
 #[derive(Debug)]
 pub struct PriceLevels {
     /// Levels array (fixed-size)

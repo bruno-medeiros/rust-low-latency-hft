@@ -23,7 +23,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .sample_iters(THROUGHPUT_ITERS)
         .filter(args.filter.clone());
 
-    runner.apply_core_pinning();
+    if let Some(core) = args.pin_core {
+        runner = runner.pin_core(core);
+    }
+    // TODO: pin second thread to core 3
 
     let mut report = runner.initial_report();
 

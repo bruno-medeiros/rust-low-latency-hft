@@ -56,6 +56,7 @@ pub struct BenchRunner {
     warmup_iters: u64,
     sample_iters: u64,
     pin_core: Option<usize>,
+    memory_locked: bool,
     filter: Option<String>,
     results: Vec<ScenarioResult>,
     clock: Clock,
@@ -63,38 +64,58 @@ pub struct BenchRunner {
 
 impl BenchRunner {
     pub fn new(title: &str) -> Self {
+        let memory_locked = Self::try_mlockall();
+
         Self {
             title: title.to_string(),
             warmup_iters: 10_000,
             sample_iters: 100_000,
             pin_core: None,
+            memory_locked,
             filter: None,
             results: Vec::new(),
             clock: Clock::new(),
         }
     }
 
-    /// Pin the benchmark thread to a specific CPU core for more consistent latency measurements.
-    /// Call this before running scenarios; on unsupported platforms this is a no-op.
-    pub fn pin_core(mut self, core: usize) -> Self {
-        self.pin_core = Some(core);
-        self
+    /// Lock all current and future pages into RAM to prevent page faults during measurement.
+    /// Returns true on success, false if unsupported or insufficient privileges.
+    #[cfg(target_os = "linux")]
+    fn try_mlockall() -> bool {
+        // SAFETY: mlockall is a POSIX API that locks pages into physical RAM.
+        // MCL_CURRENT locks existing mappings, MCL_FUTURE locks pages mapped after the call.
+        let ret = unsafe { libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) };
+        if ret == 0 {
+            eprintln!("  mlockall: pages locked into RAM");
+            true
+        } else {
+            eprintln!("  mlockall: failed (run as root or set CAP_IPC_LOCK); continuing without");
+            false
+        }
     }
 
-    pub fn apply_core_pinning(&mut self) {
-        if let Some(core) = self.pin_core {
-            let core_id = CoreId { id: core };
-            if !core_affinity::set_for_current(core_id) {
-                let reason = match core_affinity::get_core_ids() {
-                    Some(cores) => {
-                        format!("core {core} not available (available: 0..{})", cores.len())
-                    }
-                    None => "core affinity not supported on this platform".to_string(),
-                };
-                eprintln!("\n  warning: CPU pinning failed — {reason}; continuing without pinning");
-                self.pin_core = None;
-            }
+    #[cfg(not(target_os = "linux"))]
+    fn try_mlockall() -> bool {
+        false
+    }
+
+    /// Pin the benchmark thread to a specific CPU core for more consistent latency
+    /// measurements. On unsupported platforms or invalid core indices this is a no-op
+    /// (with a warning).
+    pub fn pin_core(mut self, core: usize) -> Self {
+        let core_id = CoreId { id: core };
+        if core_affinity::set_for_current(core_id) {
+            self.pin_core = Some(core);
+        } else {
+            let reason = match core_affinity::get_core_ids() {
+                Some(cores) => {
+                    format!("core {core} not available (available: 0..{})", cores.len())
+                }
+                None => "core affinity not supported on this platform".to_string(),
+            };
+            eprintln!("\n  warning: CPU pinning failed — {reason}; continuing without pinning");
         }
+        self
     }
 
     pub fn warmup_iters(mut self, n: u64) -> Self {
@@ -113,7 +134,7 @@ impl BenchRunner {
     }
 
     pub fn initial_report(&self) -> BenchReport {
-        BenchReport::new_with_metadata(self.title.clone(), self.pin_core)
+        BenchReport::new_with_metadata(self.title.clone(), self.pin_core, self.memory_locked)
     }
 
     pub fn push_section(&mut self, mut section: BenchReportSection, report: &mut BenchReport) {

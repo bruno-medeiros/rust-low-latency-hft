@@ -311,8 +311,9 @@ fn inner_main() -> Result<(), Box<dyn std::error::Error>> {
         .sample_iters(100_000)
         .filter(args.filter.clone());
 
-    // TODO: add to params?
-    runner.apply_core_pinning();
+    if let Some(core) = args.pin_core {
+        runner = runner.pin_core(core);
+    }
 
     let mut report = runner.initial_report();
 

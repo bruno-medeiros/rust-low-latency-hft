@@ -57,6 +57,9 @@ pub struct ReportMetadata {
     /// Note about CPU core pinning (e.g. "Thread pinned to core 2" or "No CPU pinning applied").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpu_pinning_note: Option<String>,
+    /// Whether mlockall succeeded (pages locked into RAM, no page faults during measurement).
+    #[serde(default)]
+    pub memory_locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,7 +136,11 @@ pub struct AllocStats {
 
 impl BenchReport {
     /// Creates a report with metadata and empty sections.
-    pub fn new_with_metadata(title: String, pin_core: Option<usize>) -> Self {
+    pub fn new_with_metadata(
+        title: String,
+        pin_core: Option<usize>,
+        memory_locked: bool,
+    ) -> Self {
         let cpu_pinning_note = pin_core.map(|c| format!("Benchmark thread pinned to core {c}"));
 
         Self {
@@ -144,6 +151,7 @@ impl BenchReport {
                 rustc_version: detect_rustc_version(),
                 clock_source: detect_clock_source(),
                 cpu_pinning_note,
+                memory_locked,
             },
             sections: Vec::new(),
         }
@@ -325,6 +333,9 @@ impl BenchReport {
         ];
         if let Some(ref note) = m.cpu_pinning_note {
             props.push(("CPU pinning", note.clone()));
+        }
+        if m.memory_locked {
+            props.push(("Memory", "Locked (mlockall)".to_string()));
         }
         if let Some(b) = baseline {
             props.push((

@@ -24,6 +24,7 @@ limit-order-book = { path = "limit-order-book" }
 lockfree-queue = { path = "lockfree-queue" }
 market-data-feed = { path = "market-data-feed" }
 core_affinity = "0.8"
+libc = "0.2"
 clap = { version = "4", features = ["derive"] }
 hdrhistogram = "7"
 quanta = "0.12"
