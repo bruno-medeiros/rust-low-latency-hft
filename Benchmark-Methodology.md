@@ -1,4 +1,4 @@
- # Benchmark Methodology
+# Benchmark Methodology
 
 ## Timing methodology
 
@@ -32,7 +32,6 @@ Linux is the target platform for production HFT systems and offers far more cont
 - **CPU frequency scaling** — lock governor to `performance`, disable turbo boost for stable clocks.
 - **SCHED_FIFO** — elevate benchmark process to real-time priority (`chrt -f 90`) to prevent preemption.
 - **Core pinning** — `bench-tool` pins the benchmark thread via `core_affinity::set_for_current` (`--pin-core` flag).
-- **`mlockall`** — `bench-tool` calls `mlockall(MCL_CURRENT | MCL_FUTURE)` automatically on Linux to prevent page faults.
 - **IRQ migration** — move hardware interrupts off the benchmark core.
 - **Disable ASLR** — eliminates jitter from address randomization on pointer-heavy data structures.
 - **Disable swap** — prevents page-out stalls.
@@ -44,7 +43,4 @@ sudo ./run-benchmarks-linux.sh
 
 # Or revert manually at any time
 sudo ./run-benchmarks-linux-revert.sh
-```
-
-
 ```

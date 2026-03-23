@@ -56,7 +56,6 @@ pub struct BenchRunner {
     warmup_iters: u64,
     sample_iters: u64,
     pin_core: Option<usize>,
-    memory_locked: bool,
     filter: Option<String>,
     results: Vec<ScenarioResult>,
     clock: Clock,
@@ -64,39 +63,15 @@ pub struct BenchRunner {
 
 impl BenchRunner {
     pub fn new(title: &str) -> Self {
-        let memory_locked = Self::try_mlockall();
-
         Self {
             title: title.to_string(),
             warmup_iters: 10_000,
             sample_iters: 100_000,
             pin_core: None,
-            memory_locked,
             filter: None,
             results: Vec::new(),
             clock: Clock::new(),
         }
-    }
-
-    /// Lock all current and future pages into RAM to prevent page faults during measurement.
-    /// Returns true on success, false if unsupported or insufficient privileges.
-    #[cfg(target_os = "linux")]
-    fn try_mlockall() -> bool {
-        // SAFETY: mlockall is a POSIX API that locks pages into physical RAM.
-        // MCL_CURRENT locks existing mappings, MCL_FUTURE locks pages mapped after the call.
-        let ret = unsafe { libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) };
-        if ret == 0 {
-            eprintln!("  mlockall: pages locked into RAM");
-            true
-        } else {
-            eprintln!("  mlockall: failed (run as root or set CAP_IPC_LOCK); continuing without");
-            false
-        }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    fn try_mlockall() -> bool {
-        false
     }
 
     /// Pin the benchmark thread to a specific CPU core for more consistent latency
@@ -134,7 +109,7 @@ impl BenchRunner {
     }
 
     pub fn initial_report(&self) -> BenchReport {
-        BenchReport::new_with_metadata(self.title.clone(), self.pin_core, self.memory_locked)
+        BenchReport::new_with_metadata(self.title.clone(), self.pin_core)
     }
 
     pub fn push_section(&mut self, mut section: BenchReportSection, report: &mut BenchReport) {

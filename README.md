@@ -26,10 +26,11 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 - ITCH-style binary market data feed parser.
 
 
-## TODO
-
-- Hugepage-backed allocation (`mmap` + `MAP_HUGETLB`) for the v1 dense price-level array to reduce TLB misses.
-
 ## Additional Notes
 
 See [Benchmark Methodology](Benchmark-Methodology.md) for timing methodology, measurement techniques, etc.
+
+### TODO optimizations
+
+- **Scoped memory locking** — Optionally lock only hot benchmark memory (e.g. `mmap` a dedicated arena then `mlock` / `mlock2(MLOCK_ONFAULT)` on that range), or an opt-in flag for dedicated bench hosts. Whole-process `mlockall(MCL_CURRENT | MCL_FUTURE)` was removed: it is a poor fit for CI and atypical for production compared to targeted locking.
+- **Hugepage-backed allocation** (`mmap` + `MAP_HUGETLB`) for the v1 dense price-level array to reduce TLB misses.
