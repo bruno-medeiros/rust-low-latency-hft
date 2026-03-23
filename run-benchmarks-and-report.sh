@@ -54,6 +54,8 @@ cargo flamegraph -p matching-pipeline --bench pipeline \
     -o "$RESULTS_DIR/matching-pipeline/flamegraph.svg" \
     -- --filter Pipeline
 
+rm perf.data perf.data.old
+
 echo ""
 echo "Done. Results in ${RESULTS_DIR}/:"
 ls "$RESULTS_DIR/"
