@@ -14,9 +14,9 @@ pub struct DatagramIngestor {
 }
 
 impl DatagramIngestor {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
-            buffer: Vec::new(),
+            buffer: Vec::with_capacity(capacity),
             read_offset: 0,
             decoder: ItchDecoder::new(),
         }
@@ -25,7 +25,6 @@ impl DatagramIngestor {
     /// Feed one datagram (e.g. MoldUDP payload or raw UDP). Invokes `on_message` for each decoded record.
     /// Messages borrow from the internal buffer; the callback must not retain references beyond the call.
     pub fn push_datagram<E: From<DecodeError>>(
-        // REVIEW: err spec above
         &mut self,
         datagram: &[u8],
         mut on_message: impl FnMut(ItchMessage<'_>) -> Result<(), E>,
@@ -51,7 +50,7 @@ impl DatagramIngestor {
 
 impl Default for DatagramIngestor {
     fn default() -> Self {
-        Self::new()
+        Self::new(4 * 1024)
     }
 }
 
@@ -64,7 +63,7 @@ mod tests {
     #[test]
     fn ingestor_decodes_single_message() {
         let datagram = encode::encode_system_event("START");
-        let mut ingestor = DatagramIngestor::new();
+        let mut ingestor = DatagramIngestor::default();
         let mut count = 0;
         ingestor
             .push_datagram::<DecodeError>(&datagram, |msg| {
@@ -84,7 +83,7 @@ mod tests {
         let mut datagram = encode::encode_system_event("A");
         datagram.extend_from_slice(&encode::encode_system_event("B"));
         datagram.extend_from_slice(&encode::encode_add_order(1, Side::Buy, 100, 5000, "AAPL"));
-        let mut ingestor = DatagramIngestor::new();
+        let mut ingestor = DatagramIngestor::default();
         let mut count = 0;
         ingestor
             .push_datagram::<DecodeError>(&datagram, |msg| {
@@ -115,7 +114,7 @@ mod tests {
         let full = encode::encode_system_event("SPLIT");
         let mid = full.len() / 2;
         let (first, second) = full.split_at(mid);
-        let mut ingestor = DatagramIngestor::new();
+        let mut ingestor = DatagramIngestor::default();
         let mut count = 0;
         ingestor
             .push_datagram::<DecodeError>(first, |_msg| {

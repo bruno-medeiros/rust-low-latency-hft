@@ -84,7 +84,6 @@ fn decode_add_order(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
     if payload.len() < 19 + sym_len {
         return Err(DecodeError::truncated(19 + sym_len, payload.len()));
     }
-    // REVIEW: allocation here needed?
     let symbol =
         std::str::from_utf8(&payload[19..19 + sym_len]).map_err(|_| DecodeError::InvalidUtf8)?;
     Ok(ItchMessage::AddOrder {

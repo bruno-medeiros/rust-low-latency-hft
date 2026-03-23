@@ -29,7 +29,7 @@ impl PriceLevel {
     //     self.orders.pop_front();
     // }
 
-    /// TODO: O(n) scan — acceptable for Phase 1, replace with intrusive list or arena later.
+    /// O(n) scan — acceptable for Phase 1, replace with intrusive list or arena later.
     pub fn remove(&mut self, order_id: OrderId, qty: Qty) {
         if let Some(pos) = self.orders.iter().position(|&id| id == order_id) {
             self.orders.remove(pos);
