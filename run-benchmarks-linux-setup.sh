@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
-# Linux benchmark runtime tuning: governor, turbo, IRQ affinity, ASLR, swap, caches.
-# Extracted from run-benchmarks-linux.sh for reuse (e.g. CI).
+# Linux benchmark runtime tuning: 
 # Must be run as root (or via sudo) for sysfs/cpufreq/IRQ changes.
 #
 # Prerequisites (require reboot — not handled by this script):
@@ -61,8 +60,5 @@ echo 0 | tee /proc/sys/kernel/randomize_va_space > /dev/null
 
 echo "  Disabling swap..."
 swapoff -a 2>/dev/null || true
-
-echo "  Dropping filesystem caches..."
-sync && echo 3 | tee /proc/sys/vm/drop_caches > /dev/null
 
 echo "  Runtime tuning applied."

@@ -35,7 +35,6 @@ Linux is the target platform for production HFT systems and offers far more cont
 - **IRQ migration** — move hardware interrupts off the benchmark core.
 - **Disable ASLR** — eliminates jitter from address randomization on pointer-heavy data structures.
 - **Disable swap** — prevents page-out stalls.
-- **Drop filesystem caches** — ensures a clean baseline between runs.
 
 ```bash
 # Apply tuning, run all benchmarks, then revert

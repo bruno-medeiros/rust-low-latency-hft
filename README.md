@@ -28,7 +28,7 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 
 ## Additional Notes
 
-See [Benchmark Methodology](Benchmark-Methodology.md) for timing methodology, measurement techniques, etc.
+See [Benchmark Methodology](Benchmark-Methodology.md) for measurement methodology, OS tuning, etc.
 
 ### TODO optimizations
 
