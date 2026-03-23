@@ -1,9 +1,6 @@
 # Continuous benchmark tracking via https://github.com/benchmark-action/github-action-benchmark
 #
-# - Custom `harness = false` benches (bench-tool JSON): `github-action-json` → custom JSON tools.
-# - Criterion: `--output-format bencher` matches the action's `tool: cargo` parser (same `test …
-#   bench: … ns/iter` lines as nightly libtest `cargo bench`; see upstream rust.yml and extract.ts).
-#   https://github.com/benchmark-action/github-action-benchmark/blob/master/.github/workflows/rust.yml
+# Custom `harness = false` benches (bench-tool JSON): `github-action-json` → custom JSON tools.
 #
 # First-time setup: create an empty `gh-pages` branch (or let the action create data on first push
 # if your repo allows token pushes to that branch).
@@ -57,13 +54,6 @@ jobs:
           cargo bench -p matching-pipeline --bench pipeline -- \
             --save-json "$BENCH_CI/pipeline.json"
 
-      - name: Run Criterion bench (bencher output for tool cargo)
-        run: |
-          set -euo pipefail
-          cargo bench -p limit-order-book --bench lob_criterion -- \
-            --noplot \
-            --output-format bencher 2>&1 | tee "$BENCH_CI/criterion-cargo.txt"
-
       - name: Convert bench-tool JSON for github-action-benchmark
         run: |
           set -euo pipefail
@@ -91,17 +81,6 @@ jobs:
           name: Rust benchmarks (latency)
           tool: customSmallerIsBetter
           output-file-path: benchmark-ci/github-latency.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
-          benchmark-data-dir-path: dev/bench
-          summary-always: true
-
-      - name: Store benchmark result (Criterion, cargo parser)
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          name: Rust benchmarks (Criterion / cargo)
-          tool: cargo
-          output-file-path: benchmark-ci/criterion-cargo.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
           benchmark-data-dir-path: dev/bench
