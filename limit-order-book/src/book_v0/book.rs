@@ -102,7 +102,10 @@ impl LimitOrderBookV0 {
             return;
         }
         if price == 0 {
-            self.emit(events, EventKind::rejected(order_id, RejectReason::InvalidPrice));
+            self.emit(
+                events,
+                EventKind::rejected(order_id, RejectReason::InvalidPrice),
+            );
             return;
         }
 
@@ -195,10 +198,7 @@ impl LimitOrderBookV0 {
     pub fn cancel_order(&mut self, id: OrderId, events: &mut impl EventSink) {
         match self.orders.remove(&id) {
             None => {
-                self.emit(
-                    events,
-                    EventKind::rejected(id, RejectReason::UnknownOrder),
-                );
+                self.emit(events, EventKind::rejected(id, RejectReason::UnknownOrder));
             }
             Some(order) => {
                 let book_side = match order.side {
@@ -329,7 +329,7 @@ impl Default for LimitOrderBookV0 {
 }
 
 impl LimitOrderBook for LimitOrderBookV0 {
-    fn with_config(_price_range: (Price, Price), _order_capacity: OrderId) -> Self {
+    fn with_config(_: (Price, Price), _: u64) -> Self {
         Self::new()
     }
 

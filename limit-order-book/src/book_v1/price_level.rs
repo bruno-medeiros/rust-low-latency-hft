@@ -1,12 +1,12 @@
 use crate::book_v1::book::OrderSlot;
-use crate::types::{OrderKey, Price, Qty};
+use crate::types::{OrderSlabKey, Price, Qty};
 
 #[derive(Debug)]
 pub struct PriceLevel {
     pub total_qty: Qty,
     pub price: Price,
-    pub order_head: Option<OrderKey>,
-    pub order_tail: Option<OrderKey>,
+    pub order_head: Option<OrderSlabKey>,
+    pub order_tail: Option<OrderSlabKey>,
 }
 
 impl PriceLevel {
@@ -19,7 +19,7 @@ impl PriceLevel {
         }
     }
 
-    pub fn append_order(&mut self, key: OrderKey, qty: Qty) -> Option<OrderKey> {
+    pub fn append_order(&mut self, key: OrderSlabKey, qty: Qty) -> Option<OrderSlabKey> {
         self.total_qty += qty;
         match self.order_tail {
             None => {
@@ -34,11 +34,11 @@ impl PriceLevel {
         }
     }
 
-    pub fn front(&self) -> Option<OrderKey> {
+    pub fn front(&self) -> Option<OrderSlabKey> {
         self.order_head
     }
 
-    pub fn remove(&mut self, key: OrderKey, order_slot: &OrderSlot) {
+    pub fn remove(&mut self, key: OrderSlabKey, order_slot: &OrderSlot) {
         if self.order_head == Some(key) {
             self.order_head = order_slot.next;
         }
@@ -62,14 +62,14 @@ mod tests {
     use super::PriceLevel;
     use crate::book_v1::book::OrderSlot;
     use crate::order::Order;
-    use crate::types::{OrderKey, Side};
+    use crate::types::{OrderSlabKey, Side};
 
     fn order_slot(
         id: u64,
         price: u64,
         remaining_qty: u64,
-        prev: Option<OrderKey>,
-        next: Option<OrderKey>,
+        prev: Option<OrderSlabKey>,
+        next: Option<OrderSlabKey>,
     ) -> OrderSlot {
         OrderSlot {
             next,

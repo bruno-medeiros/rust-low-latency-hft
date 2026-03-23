@@ -3,7 +3,7 @@ use crate::book_v1::orders::BookOrders;
 use crate::book_v1::price_level::PriceLevel;
 use crate::event::{Event, EventKind, EventSink, RejectReason};
 use crate::order::Order;
-use crate::types::{OrderId, OrderKey, Price, Qty, Side};
+use crate::types::{OrderId, OrderSlabKey, Price, Qty, Side};
 
 //noinspection DuplicatedCode
 fn emit(events: &mut impl EventSink, seq: &mut u64, kind: EventKind) {
@@ -14,8 +14,8 @@ fn emit(events: &mut impl EventSink, seq: &mut u64, kind: EventKind) {
 
 #[derive(Debug)]
 pub struct OrderSlot {
-    pub next: Option<OrderKey>,
-    pub prev: Option<OrderKey>,
+    pub next: Option<OrderSlabKey>,
+    pub prev: Option<OrderSlabKey>,
     pub order: Order,
 }
 
@@ -96,11 +96,11 @@ impl PriceLevels {
 
     pub fn add_order(
         &mut self,
-        key: OrderKey,
+        key: OrderSlabKey,
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Option<OrderKey> {
+    ) -> Option<OrderSlabKey> {
         let ix = (price - self.base_price) as usize;
 
         match side {
@@ -341,7 +341,7 @@ impl LimitOrderBookV1 {
         }
     }
 
-    fn remove_order(&mut self, order_key: OrderKey) -> OrderSlot {
+    fn remove_order(&mut self, order_key: OrderSlabKey) -> OrderSlot {
         let order_slot = self.orders.remove_by_key(order_key);
 
         let price_level = self.price_levels.existing_level(order_slot.order.price);
@@ -446,7 +446,7 @@ impl LimitOrderBookV1 {
 }
 
 impl LimitOrderBook for LimitOrderBookV1 {
-    fn with_config(price_range: (Price, Price), order_capacity: OrderId) -> Self {
+    fn with_config(price_range: (Price, Price), order_capacity: u64) -> Self {
         Self::new(price_range, order_capacity as usize)
     }
 

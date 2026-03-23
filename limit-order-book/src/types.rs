@@ -1,7 +1,7 @@
 pub type OrderId = u64;
 
 /// Internal slab key for order slot storage. Not exposed externally.
-pub type OrderKey = usize;
+pub type OrderSlabKey = usize;
 
 /// Price in ticks (smallest price increment). Fixed-point integer to avoid floating-point issues.
 pub type Price = u64;

@@ -8,6 +8,6 @@ Fixed-size **ring buffer**; `SpscQueue::new(slot_count)` takes the number of **s
 
 **Head** and **tail** are shared [`AtomicU32`](https://doc.rust-lang.org/std/sync/atomic/struct.AtomicU32.html)s (cache-line padded). The producer **writes** `tail` with `Release` after filling a slot; the consumer **loads** it with `Acquire` before reading. Slots are **`UnsafeCell<Option<T>>`** (no `T: Default` required).
 
-## Possible improvement: `MaybeUninit<T>`
+### Possible improvements:
 
-Slots could use **`MaybeUninit<T>`** instead of **`Option<T>`** to drop the discriminant (often smaller and less branching for small `T`), at the cost of more **`unsafe`** and careful **drop** handling.
+* Slots could use **`MaybeUninit<T>`** instead of **`Option<T>`** to drop the discriminant (often smaller and less branching for small `T`), at the cost of more **`unsafe`** and careful **drop** handling.
