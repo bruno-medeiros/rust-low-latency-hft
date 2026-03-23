@@ -30,6 +30,10 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    # Bench binaries run with CWD = the crate package dir (e.g. limit-order-book/), not the repo
+    # root. Use workspace-absolute paths for --save-json so outputs land next to later steps.
+    env:
+      BENCH_CI: ${{ github.workspace }}/benchmark-ci
     steps:
       - uses: actions/checkout@v4
 
@@ -38,32 +42,32 @@ jobs:
       - name: Run benchmarks
         run: |
           set -euo pipefail
-          mkdir -p benchmark-ci
+          mkdir -p "$BENCH_CI"
           cargo bench -p limit-order-book --bench lob -- \
             --lob-version v0 \
-            --save-json benchmark-ci/lob_v0.json
+            --save-json "$BENCH_CI/lob_v0.json"
           cargo bench -p limit-order-book --bench lob -- \
             --lob-version v1 \
-            --save-json benchmark-ci/lob_v1.json
+            --save-json "$BENCH_CI/lob_v1.json"
           cargo bench -p matching-pipeline --bench pipeline -- \
-            --save-json benchmark-ci/pipeline.json
+            --save-json "$BENCH_CI/pipeline.json"
 
       - name: Run Criterion bench (bencher output for tool cargo)
         run: |
           set -euo pipefail
           cargo bench -p limit-order-book --bench lob_criterion -- \
             --noplot \
-            --output-format bencher 2>&1 | tee benchmark-ci/criterion-cargo.txt
+            --output-format bencher 2>&1 | tee "$BENCH_CI/criterion-cargo.txt"
 
       - name: Convert bench-tool JSON for github-action-benchmark
         run: |
           set -euo pipefail
           cargo run -p bench-tool --locked --bin github-action-json -- \
-            --report "LOB v0" benchmark-ci/lob_v0.json \
-            --report "LOB v1" benchmark-ci/lob_v1.json \
-            --report "Pipeline" benchmark-ci/pipeline.json \
-            --out-latency benchmark-ci/github-latency.json \
-            --out-throughput benchmark-ci/github-throughput.json
+            --report "LOB v0" "$BENCH_CI/lob_v0.json" \
+            --report "LOB v1" "$BENCH_CI/lob_v1.json" \
+            --report "Pipeline" "$BENCH_CI/pipeline.json" \
+            --out-latency "$BENCH_CI/github-latency.json" \
+            --out-throughput "$BENCH_CI/github-throughput.json"
 
       - name: Store benchmark result (throughput)
         uses: benchmark-action/github-action-benchmark@v1
