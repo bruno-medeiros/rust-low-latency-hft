@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774285206364,
+  "lastUpdate": 1774285208170,
   "repoUrl": "https://github.com/bruno-medeiros/rust-low-latency-hft",
   "entries": {
     "Rust benchmarks (throughput)": [
@@ -187,6 +187,118 @@ window.BENCHMARK_DATA = {
           {
             "name": "LOB v1 / Latency / Realistic mix (per-op) (mean latency)",
             "value": 109.96696000000009,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "bruno.medeiros@cryptio.co",
+            "name": "Bruno Medeiros"
+          },
+          "committer": {
+            "email": "bruno.medeiros@cryptio.co",
+            "name": "Bruno Medeiros"
+          },
+          "distinct": true,
+          "id": "7eab970dcc25141c0592212ad22a971a0ed07946",
+          "message": "remove caches",
+          "timestamp": "2026-03-23T16:41:00Z",
+          "tree_id": "6750e29e6a5e638033fabc2c9b9c2675238e22ee",
+          "url": "https://github.com/bruno-medeiros/rust-low-latency-hft/commit/7eab970dcc25141c0592212ad22a971a0ed07946"
+        },
+        "date": 1774285207520,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "LOB v0 / Latency / Add (passive) (mean latency)",
+            "value": 96.49027999999998,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Add (sweep 5 levels, 50 fills) (mean latency)",
+            "value": 2448.2230399999985,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Market (sweep 10 levels, 100 fills) (mean latency)",
+            "value": 4816.495139999999,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Cancel (head of queue) (mean latency)",
+            "value": 86.82148,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Cancel (tail of queue) (mean latency)",
+            "value": 208.07283000000004,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Spread (BBO query) (mean latency)",
+            "value": 13.32558,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Depth (top 5) (mean latency)",
+            "value": 81.87276999999996,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Order lookup (hit) (mean latency)",
+            "value": 38.36272,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v0 / Latency / Realistic mix (per-op) (mean latency)",
+            "value": 115.38941,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Add (passive) (mean latency)",
+            "value": 81.81005000000005,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Add (sweep 5 levels, 50 fills) (mean latency)",
+            "value": 1486.2923899999982,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Market (sweep 10 levels, 100 fills) (mean latency)",
+            "value": 2766.3357500000025,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Cancel (head of queue) (mean latency)",
+            "value": 119.31292999999997,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Cancel (tail of queue) (mean latency)",
+            "value": 72.69739999999997,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Spread (BBO query) (mean latency)",
+            "value": 11.352570000000004,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Depth (top 5) (mean latency)",
+            "value": 271.7425200000004,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Order lookup (hit) (mean latency)",
+            "value": 20.306220000000003,
+            "unit": "ns"
+          },
+          {
+            "name": "LOB v1 / Latency / Realistic mix (per-op) (mean latency)",
+            "value": 113.43873000000004,
             "unit": "ns"
           }
         ]
