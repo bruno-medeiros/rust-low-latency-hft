@@ -136,11 +136,7 @@ pub struct AllocStats {
 
 impl BenchReport {
     /// Creates a report with metadata and empty sections.
-    pub fn new_with_metadata(
-        title: String,
-        pin_core: Option<usize>,
-        memory_locked: bool,
-    ) -> Self {
+    pub fn new_with_metadata(title: String, pin_core: Option<usize>, memory_locked: bool) -> Self {
         let cpu_pinning_note = pin_core.map(|c| format!("Benchmark thread pinned to core {c}"));
 
         Self {
@@ -301,7 +297,6 @@ fn render_throughput_scenarios<R: Renderer>(
             );
         }
 
-        renderer.render_heading(out, 5, "Throughput flamegraph");
         renderer.render_throughput_extra(out);
     }
 }

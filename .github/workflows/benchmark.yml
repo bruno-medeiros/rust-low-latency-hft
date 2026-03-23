@@ -39,6 +39,11 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      - name: Linux benchmark tuning (best-effort)
+        run: |
+          set -euo pipefail
+          sudo bash "${{ github.workspace }}/run-benchmarks-linux-setup.sh" --bench-core 2
+
       - name: Run benchmarks
         run: |
           set -euo pipefail

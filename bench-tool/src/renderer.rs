@@ -142,6 +142,8 @@ impl Renderer for MarkdownRenderer {
 
     fn render_throughput_extra(&self, out: &mut String) {
         if let Some(ref path) = self.flamegraph_path {
+            self.render_heading(out, 5, "Throughput flamegraph");
+
             out.push_str(&format!("![Flame graph]({path})\n\n"));
         }
     }
