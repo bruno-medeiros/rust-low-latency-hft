@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774344453331,
+  "lastUpdate": 1774351533398,
   "repoUrl": "https://github.com/bruno-medeiros/rust-low-latency-hft",
   "entries": {
     "Rust benchmarks (throughput)": [
@@ -77,6 +77,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Pipeline / Pipeline (Lobster data)",
             "value": 8153073.77131286,
+            "unit": "ops/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "bruno.do.medeiros@gmail.com",
+            "name": "Bruno Medeiros",
+            "username": "bruno-medeiros"
+          },
+          "committer": {
+            "email": "bruno.do.medeiros@gmail.com",
+            "name": "Bruno Medeiros",
+            "username": "bruno-medeiros"
+          },
+          "distinct": true,
+          "id": "fca21b12d4aaa458733934de77eb950294a74157",
+          "message": "fix core pinning in pipeline and report",
+          "timestamp": "2026-03-24T11:07:39Z",
+          "tree_id": "d198d3a124f3a76811758dd70644d9e4a8741ef1",
+          "url": "https://github.com/bruno-medeiros/rust-low-latency-hft/commit/fca21b12d4aaa458733934de77eb950294a74157"
+        },
+        "date": 1774351533034,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "LOB v0 / Throughput (realistic mix) / Throughput (realistic mix)",
+            "value": 13563930.68204542,
+            "unit": "ops/s"
+          },
+          {
+            "name": "LOB v1 / Throughput (realistic mix) / Throughput (realistic mix)",
+            "value": 29111282.994584408,
+            "unit": "ops/s"
+          },
+          {
+            "name": "Pipeline / Pipeline (Lobster data)",
+            "value": 10114745.643731026,
             "unit": "ops/s"
           }
         ]
