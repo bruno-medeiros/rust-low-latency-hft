@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Matching pipeline",
-    "timestamp": "2026-03-20T20:11:47Z",
+    "timestamp": "2026-03-24T12:07:27Z",
     "hardware": {
       "cpu_model": "Apple M4 Pro",
       "cpu_cores": 12,
@@ -11,12 +11,30 @@
       "hostname": "Mac.mynet"
     },
     "rustc_version": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
-    "clock_source": "OS clock (platform fallback via quanta)"
+    "clock_source": "OS clock (platform fallback via quanta)",
+    "runtime_tuning": {
+      "isolated_cpus": "not applicable (macOS; no isolcpus sysfs — use thread affinity / QoS)",
+      "cpu_frequency_governor": "not exposed via sysfs (macOS; see `pmset -g` / Energy settings)",
+      "turbo_boost": "not exposed via sysfs (macOS)",
+      "irq_affinity": "not applicable (macOS)",
+      "aslr": "sysctl failed (status exit status: 1): sysctl: unknown oid 'kern.randomize_va_space'",
+      "swap": "total = 6144.00M  used = 5250.19M  free = 893.81M  (encrypted)"
+    },
+    "params": {
+      "ASLR": "sysctl failed (status exit status: 1): sysctl: unknown oid 'kern.randomize_va_space'",
+      "CPU governor": "not exposed via sysfs (macOS; see `pmset -g` / Energy settings)",
+      "IRQ affinity (sample)": "not applicable (macOS)",
+      "Isolated CPUs": "not applicable (macOS; no isolcpus sysfs — use thread affinity / QoS)",
+      "Swap": "total = 6144.00M  used = 5250.19M  free = 893.81M  (encrypted)",
+      "Turbo / boost": "not exposed via sysfs (macOS)"
+    }
   },
   "sections": [
     {
       "title": "",
       "params": {
+        "consumer_pin_core": "Could not pin core 3",
+        "producer_pin_core": "Could not pin core 2",
         "queue_slots": "4096",
         "sample": "LOBSTER_SampleFiles/GOOG_2012-06-21_34200000_57600000_message_1.csv"
       },
@@ -24,7 +42,7 @@
         {
           "name": "Pipeline (Lobster data)",
           "samples": 40,
-          "throughput_ops_per_sec": 18421294.97214935,
+          "throughput_ops_per_sec": 18582020.320904516,
           "allocations": {
             "total_allocs": 12,
             "total_deallocs": 0,
@@ -34,7 +52,7 @@
             "avg_bytes_per_op": 1.6
           },
           "setup_allocs": 11,
-          "setup_bytes": 22846016,
+          "setup_bytes": 22846024,
           "event_counts": {
             "accepted": 961579,
             "rejected": 224768,

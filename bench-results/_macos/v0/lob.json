@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Limit Order Book (v0)",
-    "timestamp": "2026-03-20T20:08:49Z",
+    "timestamp": "2026-03-24T12:04:19Z",
     "hardware": {
       "cpu_model": "Apple M4 Pro",
       "cpu_cores": 12,
@@ -11,13 +11,30 @@
       "hostname": "Mac.mynet"
     },
     "rustc_version": "rustc 1.91.1 (ed61e7d7e 2025-11-07)",
-    "clock_source": "OS clock (platform fallback via quanta)"
+    "clock_source": "OS clock (platform fallback via quanta)",
+    "runtime_tuning": {
+      "isolated_cpus": "not applicable (macOS; no isolcpus sysfs — use thread affinity / QoS)",
+      "cpu_frequency_governor": "not exposed via sysfs (macOS; see `pmset -g` / Energy settings)",
+      "turbo_boost": "not exposed via sysfs (macOS)",
+      "irq_affinity": "not applicable (macOS)",
+      "aslr": "sysctl failed (status exit status: 1): sysctl: unknown oid 'kern.randomize_va_space'",
+      "swap": "total = 6144.00M  used = 5250.19M  free = 893.81M  (encrypted)"
+    },
+    "params": {
+      "ASLR": "sysctl failed (status exit status: 1): sysctl: unknown oid 'kern.randomize_va_space'",
+      "CPU governor": "not exposed via sysfs (macOS; see `pmset -g` / Energy settings)",
+      "IRQ affinity (sample)": "not applicable (macOS)",
+      "Isolated CPUs": "not applicable (macOS; no isolcpus sysfs — use thread affinity / QoS)",
+      "Swap": "total = 6144.00M  used = 5250.19M  free = 893.81M  (encrypted)",
+      "Turbo / boost": "not exposed via sysfs (macOS)"
+    }
   },
   "sections": [
     {
       "title": "Latency",
       "params": {
         "BENCH_ITERS": "100000",
+        "Default pinned core": "Could not pin core 2",
         "WARMUP_ITERS": "10000",
         "book_levels": "100",
         "orders_per_level": "10"
@@ -33,9 +50,9 @@
             "p95_ns": 83,
             "p99_ns": 84,
             "p999_ns": 125,
-            "max_ns": 16847,
-            "mean_ns": 39.86619999999999,
-            "stdev_ns": 92.44705175158373
+            "max_ns": 6375,
+            "mean_ns": 39.38729,
+            "stdev_ns": 30.044630409707157
           },
           "allocations": {
             "total_allocs": 100000,
@@ -50,15 +67,15 @@
           "name": "Add (sweep 5 levels, 50 fills)",
           "samples": 100000,
           "latency": {
-            "min_ns": 833,
-            "p50_ns": 1083,
+            "min_ns": 875,
+            "p50_ns": 1084,
             "p90_ns": 1209,
-            "p95_ns": 1250,
-            "p99_ns": 1500,
+            "p95_ns": 1291,
+            "p99_ns": 1542,
             "p999_ns": 4875,
-            "max_ns": 35199,
-            "mean_ns": 1111.1579000000002,
-            "stdev_ns": 300.18806839644714
+            "max_ns": 40479,
+            "mean_ns": 1122.30105,
+            "stdev_ns": 337.22564685814973
           },
           "allocations": {
             "total_allocs": 0,
@@ -73,15 +90,15 @@
           "name": "Market (sweep 10 levels, 100 fills)",
           "samples": 100000,
           "latency": {
-            "min_ns": 1791,
+            "min_ns": 1792,
             "p50_ns": 2209,
             "p90_ns": 2417,
-            "p95_ns": 2459,
-            "p99_ns": 2917,
-            "p999_ns": 4835,
-            "max_ns": 39935,
-            "mean_ns": 2225.5028699999993,
-            "stdev_ns": 374.97358679214074
+            "p95_ns": 2501,
+            "p99_ns": 3043,
+            "p999_ns": 9439,
+            "max_ns": 98687,
+            "mean_ns": 2254.6611199999957,
+            "stdev_ns": 640.0953590835866
           },
           "allocations": {
             "total_allocs": 0,
@@ -100,11 +117,11 @@
             "p50_ns": 41,
             "p90_ns": 42,
             "p95_ns": 42,
-            "p99_ns": 42,
-            "p999_ns": 208,
-            "max_ns": 14647,
-            "mean_ns": 29.20326999999999,
-            "stdev_ns": 52.05113458232299
+            "p99_ns": 83,
+            "p999_ns": 292,
+            "max_ns": 18943,
+            "mean_ns": 32.53665,
+            "stdev_ns": 65.59953854088839
           },
           "allocations": {
             "total_allocs": 0,
@@ -122,12 +139,12 @@
             "min_ns": 100,
             "p50_ns": 167,
             "p90_ns": 208,
-            "p95_ns": 208,
-            "p99_ns": 250,
-            "p999_ns": 416,
-            "max_ns": 27087,
-            "mean_ns": 165.83658999999994,
-            "stdev_ns": 175.73243698068922
+            "p95_ns": 209,
+            "p99_ns": 227,
+            "p999_ns": 500,
+            "max_ns": 19423,
+            "mean_ns": 168.99861,
+            "stdev_ns": 120.88891954214786
           },
           "allocations": {
             "total_allocs": 0,
@@ -144,13 +161,13 @@
           "latency": {
             "min_ns": 1,
             "p50_ns": 1,
-            "p90_ns": 41,
-            "p95_ns": 42,
+            "p90_ns": 1,
+            "p95_ns": 41,
             "p99_ns": 42,
             "p999_ns": 42,
-            "max_ns": 208,
-            "mean_ns": 5.67907,
-            "stdev_ns": 13.076511535386643
+            "max_ns": 167,
+            "mean_ns": 3.1601899999999996,
+            "stdev_ns": 9.162385560753268
           },
           "allocations": {
             "total_allocs": 0,
@@ -166,14 +183,14 @@
           "samples": 100000,
           "latency": {
             "min_ns": 1,
-            "p50_ns": 41,
-            "p90_ns": 42,
-            "p95_ns": 42,
-            "p99_ns": 83,
-            "p999_ns": 167,
-            "max_ns": 33535,
-            "mean_ns": 31.04898,
-            "stdev_ns": 120.36009006709658
+            "p50_ns": 42,
+            "p90_ns": 83,
+            "p95_ns": 83,
+            "p99_ns": 84,
+            "p999_ns": 84,
+            "max_ns": 129407,
+            "mean_ns": 45.91969000000001,
+            "stdev_ns": 411.00519033256006
           },
           "allocations": {
             "total_allocs": 100000,
@@ -193,10 +210,10 @@
             "p90_ns": 1,
             "p95_ns": 42,
             "p99_ns": 42,
-            "p999_ns": 83,
-            "max_ns": 15799,
-            "mean_ns": 5.016360000000001,
-            "stdev_ns": 51.63898229390661
+            "p999_ns": 42,
+            "max_ns": 292,
+            "mean_ns": 4.46378,
+            "stdev_ns": 11.545567465984512
           },
           "allocations": {
             "total_allocs": 0,
@@ -216,10 +233,10 @@
             "p90_ns": 83,
             "p95_ns": 84,
             "p99_ns": 84,
-            "p999_ns": 250,
-            "max_ns": 8127,
-            "mean_ns": 43.33322000000001,
-            "stdev_ns": 51.553348721800795
+            "p999_ns": 125,
+            "max_ns": 8879,
+            "mean_ns": 45.11074,
+            "stdev_ns": 44.16844661805982
           },
           "allocations": {
             "total_allocs": 40000,
@@ -235,6 +252,7 @@
     {
       "title": "Throughput (realistic mix)",
       "params": {
+        "Default pinned core": "Could not pin core 2",
         "book_levels": "100",
         "orders_per_level": "10"
       },
@@ -242,7 +260,7 @@
         {
           "name": "Throughput (realistic mix)",
           "samples": 2000000,
-          "throughput_ops_per_sec": 27156170.977950443,
+          "throughput_ops_per_sec": 28771124.673218284,
           "allocations": {
             "total_allocs": 76000646,
             "total_deallocs": 70000011,
