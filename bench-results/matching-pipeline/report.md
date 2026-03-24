@@ -3,7 +3,7 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-03-24T15:36:40Z |
+| Timestamp | 2026-03-24T17:09:57Z |
 | CPU | AMD Ryzen 7 7800X3D 8-Core Processor |
 | Cores | 16 |
 | Memory | 30.5 GB |
@@ -11,12 +11,12 @@
 | Host | mint |
 | Rust | rustc 1.91.1 (ed61e7d7e 2025-11-07) |
 | Clock | TSC (RDTSC via quanta) |
-| ASLR | enabled full (randomize_va_space=2) |
-| CPU governor | powersave (all 16 CPUs) |
+| ASLR | disabled (randomize_va_space=0) |
+| CPU governor | performance (all 16 CPUs) |
 | IRQ affinity (sample) | mixed (64 sampled IRQs; first=0-15) |
 | Isolated CPUs | 2-3 |
 | Swap | none active (/proc/swaps header only) |
-| Turbo / boost | enabled (AMD cpufreq boost=1) |
+| Turbo / boost | disabled (AMD cpufreq boost=0) |
 
 ## 
 
@@ -31,7 +31,7 @@
 
 | Scenario | ops/sec | allocs/op | deallocs/op | bytes/op | setup allocs | setup bytes |
 |----------|---------|-----------|-------------|----------|--------------|-------------|
-| Pipeline (Lobster data) | 14.3M | 0.2 | 0.0 | 0B | 10 | 21.8MiB |
+| Pipeline (Lobster data) | 12.5M | 0.2 | 0.0 | 0B | 10 | 21.8MiB |
 
 | Scenario | Accepted | Rejected | Fill | Filled | Cancelled |
 |----------|----------|----------|------|--------|-----------|

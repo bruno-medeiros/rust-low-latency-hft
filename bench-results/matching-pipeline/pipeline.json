@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Matching pipeline",
-    "timestamp": "2026-03-24T15:36:40Z",
+    "timestamp": "2026-03-24T17:09:57Z",
     "hardware": {
       "cpu_model": "AMD Ryzen 7 7800X3D 8-Core Processor",
       "cpu_cores": 16,
@@ -14,19 +14,19 @@
     "clock_source": "TSC (RDTSC via quanta)",
     "runtime_tuning": {
       "isolated_cpus": "2-3",
-      "cpu_frequency_governor": "powersave (all 16 CPUs)",
-      "turbo_boost": "enabled (AMD cpufreq boost=1)",
+      "cpu_frequency_governor": "performance (all 16 CPUs)",
+      "turbo_boost": "disabled (AMD cpufreq boost=0)",
       "irq_affinity": "mixed (64 sampled IRQs; first=0-15)",
-      "aslr": "enabled full (randomize_va_space=2)",
+      "aslr": "disabled (randomize_va_space=0)",
       "swap": "none active (/proc/swaps header only)"
     },
     "params": {
-      "ASLR": "enabled full (randomize_va_space=2)",
-      "CPU governor": "powersave (all 16 CPUs)",
+      "ASLR": "disabled (randomize_va_space=0)",
+      "CPU governor": "performance (all 16 CPUs)",
       "IRQ affinity (sample)": "mixed (64 sampled IRQs; first=0-15)",
       "Isolated CPUs": "2-3",
       "Swap": "none active (/proc/swaps header only)",
-      "Turbo / boost": "enabled (AMD cpufreq boost=1)"
+      "Turbo / boost": "disabled (AMD cpufreq boost=0)"
     }
   },
   "sections": [
@@ -42,7 +42,7 @@
         {
           "name": "Pipeline (Lobster data)",
           "samples": 40,
-          "throughput_ops_per_sec": 14307755.981386404,
+          "throughput_ops_per_sec": 12503746.976522312,
           "allocations": {
             "total_allocs": 10,
             "total_deallocs": 0,
