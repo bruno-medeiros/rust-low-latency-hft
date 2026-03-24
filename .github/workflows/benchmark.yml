@@ -32,7 +32,7 @@ jobs:
     env:
       BENCH_CI: ${{ github.workspace }}/benchmark-ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
 
