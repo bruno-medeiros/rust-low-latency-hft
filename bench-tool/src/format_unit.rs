@@ -24,6 +24,17 @@ pub(crate) fn fmt_bytes_f64(bytes: f64) -> String {
     }
 }
 
+/// Formats a non-negative rate or count with SI-style `k` / `M` suffix (base 1000).
+pub(crate) fn fmt_si_compact(value: f64) -> String {
+    if value >= 1_000_000.0 {
+        format!("{:.1}M", value / 1_000_000.0)
+    } else if value >= 1_000.0 {
+        format!("{:.1}k", value / 1_000.0)
+    } else {
+        format!("{:.0}", value)
+    }
+}
+
 fn fmt_delta(delta: &MetricDelta, value_fn: fn(f64) -> String) -> String {
     let current_str = value_fn(delta.current);
     let pct = delta.pct_change;
@@ -55,18 +66,5 @@ pub(crate) fn fmt_delta_count(delta: &MetricDelta) -> String {
 }
 
 pub(crate) fn fmt_delta_ops_sec(delta: &MetricDelta) -> String {
-    let current_str = if delta.current >= 1_000_000.0 {
-        format!("{:.1}M", delta.current / 1_000_000.0)
-    } else if delta.current >= 1_000.0 {
-        format!("{:.1}k", delta.current / 1_000.0)
-    } else {
-        format!("{:.0}", delta.current)
-    };
-    let pct = delta.pct_change;
-    if pct.abs() < 0.5 {
-        format!("{current_str} (=)")
-    } else {
-        let arrow = if pct > 0.0 { "\u{2191}" } else { "\u{2193}" };
-        format!("{current_str} ({arrow}{:.1}%)", pct.abs())
-    }
+    fmt_delta(delta, fmt_si_compact)
 }

@@ -10,7 +10,7 @@ use crate::comparison::{
     compare_latency_scenarios, compare_throughput_scenarios, render_latency_comparison_embedded,
     render_throughput_comparison_embedded,
 };
-use crate::format_unit::{fmt_bytes_f64, fmt_duration_f64};
+use crate::format_unit::{fmt_bytes_f64, fmt_duration_f64, fmt_si_compact};
 use crate::hardware::{HardwareInfo, detect_clock_source, detect_rustc_version};
 use crate::runtime_tuning::{RuntimeTuningInfo, append_runtime_tuning_params};
 use crate::{Renderer, fmt_duration};
@@ -256,7 +256,7 @@ fn render_throughput_scenarios<R: Renderer>(
         for t in current {
             let cells = vec![
                 t.name.clone(),
-                format!("{:.0}", t.throughput_ops_per_sec),
+                fmt_si_compact(t.throughput_ops_per_sec),
                 format!("{:.1}", t.allocations.avg_allocs_per_op),
                 format!("{:.1}", t.allocations.avg_deallocs_per_op),
                 fmt_bytes_f64(t.allocations.avg_bytes_per_op),
@@ -289,11 +289,11 @@ fn render_throughput_scenarios<R: Renderer>(
                 event_headers,
                 &[
                     t.name.clone(),
-                    ec.accepted.to_string(),
-                    ec.rejected.to_string(),
-                    ec.fill.to_string(),
-                    ec.filled.to_string(),
-                    ec.cancelled.to_string(),
+                    fmt_si_compact(ec.accepted as f64),
+                    fmt_si_compact(ec.rejected as f64),
+                    fmt_si_compact(ec.fill as f64),
+                    fmt_si_compact(ec.filled as f64),
+                    fmt_si_compact(ec.cancelled as f64),
                 ],
             );
         }
