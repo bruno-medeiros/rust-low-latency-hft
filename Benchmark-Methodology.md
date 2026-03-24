@@ -30,7 +30,6 @@ Linux is the target platform for production HFT systems and offers far more cont
 **Runtime tuning (automated by `run-benchmarks-linux.sh`):**
 
 - **CPU frequency scaling** — lock governor to `performance`, disable turbo boost for stable clocks.
-- **SCHED_FIFO** — elevate benchmark process to real-time priority (`chrt -f 90`) to prevent preemption.
 - **Core pinning** — pin benchmark code to isolated cores.
 - **IRQ migration** — steer hardware interrupts away from isolated benchmark cores.
 - **Disable ASLR** — eliminates jitter from address randomization on pointer-heavy data structures.

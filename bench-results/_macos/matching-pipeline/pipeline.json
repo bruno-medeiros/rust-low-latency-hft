@@ -31,7 +31,7 @@
   },
   "sections": [
     {
-      "title": "",
+      "title": "Pipeline",
       "params": {
         "consumer_pin_core": "Could not pin core 3",
         "producer_pin_core": "Could not pin core 2",

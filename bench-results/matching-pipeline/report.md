@@ -18,7 +18,7 @@
 | Swap | none active (/proc/swaps header only) |
 | Turbo / boost | disabled (AMD cpufreq boost=0) |
 
-## 
+## Pipeline
 
 | Property | Value |
 |----------|-------|

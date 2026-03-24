@@ -18,7 +18,7 @@
 | Swap | total = 6144.00M  used = 5250.19M  free = 893.81M  (encrypted) |
 | Turbo / boost | not exposed via sysfs (macOS) |
 
-## 
+## Pipeline
 
 | Property | Value |
 |----------|-------|

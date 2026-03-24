@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         THROUGHPUT_ITERS,
     );
 
-    let mut section = BenchReportSection::new("");
+    let mut section = BenchReportSection::new("Pipeline");
 
     section.add_param("sample", test_data::GOOG_SAMPLE_MESSAGE_REL_PATH);
     section.add_param("queue_slots", pipeline_config.queue_slots.to_string());
