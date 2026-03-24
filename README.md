@@ -7,10 +7,9 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 ### [limit-order-book](limit-order-book/README.md)
 
 - a high-performance limit order book engine optimised for low-latency matching, with nanosecond-level benchmarks.
-- **p99 add: 42ns | p99 cancel: 42ns | throughput: 74M ops/sec | zero heap allocations on the hot path**
-- Full results: [LOB benchmark report](bench-results/v1/lob.md) — latency percentiles (min → p99.9), throughput, allocation tracking, flamegraph, and comparison vs v0 (baseline). Run `./run-benchmarks-and-report.sh` from the repo root to regenerate.
+  - **p99 add: 80ns | p99 cancel: 80ns | throughput: 44M ops/sec | zero heap allocations on the hot path**
+  - Full results: [LOB benchmark report](bench-results/v1/lob.md) — latency percentiles (min → p99.9), throughput, allocation tracking, flamegraph, and comparison vs v0 (baseline). 
 
-*TODO: re-run benchmarks in Linux*
 
 ### [lockfree-queue](lockfree-queue/README.md)
 
@@ -25,12 +24,19 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 
 - ITCH-style binary market data feed parser.
 
+## Benchmarks
 
-## Additional Notes
+```bash
+# Apply tuning, run all benchmarks, then revert
+sudo ./run-benchmarks-linux.sh
+
+# Or revert manually at any time
+sudo ./run-benchmarks-linux-revert.sh
+```
 
 See [Benchmark Methodology](Benchmark-Methodology.md) for measurement methodology, OS tuning, etc.
 
-### TODO optimizations
+#### TODO optimizations
 
 - **Scoped memory locking** — Optionally lock only hot benchmark memory (e.g. `mmap` a dedicated arena then `mlock` / `mlock2(MLOCK_ONFAULT)` on that range), or an opt-in flag for dedicated bench hosts. Whole-process `mlockall(MCL_CURRENT | MCL_FUTURE)` was removed: it is a poor fit for CI and atypical for production compared to targeted locking.
 - **Hugepage-backed allocation** (`mmap` + `MAP_HUGETLB`) for the v1 dense price-level array to reduce TLB misses.

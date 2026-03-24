@@ -36,10 +36,3 @@ Linux is the target platform for production HFT systems and offers far more cont
 - **Disable ASLR** — eliminates jitter from address randomization on pointer-heavy data structures.
 - **Disable swap** — prevents page-out stalls.
 
-```bash
-# Apply tuning, run all benchmarks, then revert
-sudo ./run-benchmarks-linux.sh
-
-# Or revert manually at any time
-sudo ./run-benchmarks-linux-revert.sh
-```
