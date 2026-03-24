@@ -11,28 +11,30 @@
 #   Then: sudo update-grub && sudo reboot
 #
 # Usage:
-#   ./run-benchmarks-linux.sh [--bench-core 2]
+#   ./run-benchmarks-linux.sh
 #
 set -euo pipefail
 
-BENCH_CORE=2
-if [[ "${1:-}" == "--bench-core" ]]; then
-    BENCH_CORE="${2:-2}"
-fi
+# Must match isolcpus / nohz_full in kernel boot params (see above).
+readonly BENCH_CORE=2
+readonly BENCH_CORE_B=3
+
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # ── Apply OS tuning (as root) ─────────────────────────────────────────────────
 
-sudo "$SCRIPT_DIR/run-benchmarks-linux-setup.sh" --bench-core "$BENCH_CORE"
+sudo "$SCRIPT_DIR/run-benchmarks-linux-setup.sh"
 
 # ── Run benchmarks as the current user ────────────────────────────────────────
 
 echo ""
 echo "=== Running benchmarks ==="
 
-sudo chrt -f 90 sudo -u "$USER" -- "$SCRIPT_DIR/run-benchmarks-and-report.sh" --pin-core "$BENCH_CORE"
+sudo chrt -f 90 sudo -u "$USER" -- "$SCRIPT_DIR/run-benchmarks-and-report.sh" \
+    --pin-core "$BENCH_CORE" \
+    --pin-core-b "$BENCH_CORE_B"
 
 # ── Revert tuning ─────────────────────────────────────────────────────────────
 

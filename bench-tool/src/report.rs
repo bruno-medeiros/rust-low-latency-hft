@@ -54,9 +54,6 @@ pub struct ReportMetadata {
     /// Clock source used for latency measurements (e.g. "TSC (RDTSC via quanta)").
     #[serde(default)]
     pub clock_source: String,
-    /// Note about CPU core pinning (e.g. "Thread pinned to core 2" or "No CPU pinning applied").
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cpu_pinning_note: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,9 +130,7 @@ pub struct AllocStats {
 
 impl BenchReport {
     /// Creates a report with metadata and empty sections.
-    pub fn new_with_metadata(title: String, pin_core: Option<usize>) -> Self {
-        let cpu_pinning_note = pin_core.map(|c| format!("Benchmark thread pinned to core {c}"));
-
+    pub fn new_with_metadata(title: String) -> Self {
         Self {
             metadata: ReportMetadata {
                 title,
@@ -143,7 +138,6 @@ impl BenchReport {
                 hardware: HardwareInfo::detect(),
                 rustc_version: detect_rustc_version(),
                 clock_source: detect_clock_source(),
-                cpu_pinning_note,
             },
             sections: Vec::new(),
         }
@@ -322,9 +316,6 @@ impl BenchReport {
             ("Rust", m.rustc_version.clone()),
             ("Clock", m.clock_source.clone()),
         ];
-        if let Some(ref note) = m.cpu_pinning_note {
-            props.push(("CPU pinning", note.clone()));
-        }
         if let Some(b) = baseline {
             props.push((
                 "Baseline",

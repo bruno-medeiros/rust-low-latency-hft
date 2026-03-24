@@ -9,13 +9,17 @@
 #   Then: sudo update-grub && sudo reboot
 #
 # Usage:
-#   sudo ./run-benchmarks-linux-setup.sh [--bench-core 2]
+#   sudo ./run-benchmarks-linux-setup.sh
 #
 set -euo pipefail
 
-BENCH_CORE=2
-if [[ "${1:-}" == "--bench-core" ]]; then
-    BENCH_CORE="${2:-2}"
+# Must match isolcpus / nohz_full in kernel boot params (see above) and run-benchmarks-linux.sh.
+readonly BENCH_CORE=2
+readonly BENCH_CORE_B=3
+
+if [[ $# -gt 0 ]]; then
+    echo "This script takes no arguments (benchmark cores are fixed at $BENCH_CORE and $BENCH_CORE_B)." >&2
+    exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -50,7 +54,7 @@ elif [ -f /sys/devices/system/cpu/cpufreq/boost ]; then
     echo 0 | tee /sys/devices/system/cpu/cpufreq/boost > /dev/null
 fi
 
-echo "  Migrating IRQs away from core $BENCH_CORE..."
+echo "  Migrating IRQs to housekeeping CPUs (benchmark cores ${BENCH_CORE}, ${BENCH_CORE_B}; use isolcpus to reserve them)..."
 for irq in /proc/irq/*/smp_affinity_list; do
     echo "0-1" | tee "$irq" > /dev/null 2>&1 || true
 done

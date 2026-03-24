@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
-
+use core_affinity::CoreId;
 use limit_order_book::LimitOrderBook;
 use limit_order_book::event::CountingEventSink;
 use limit_order_book::types::{Price, Qty};
 use lockfree_queue::spsc::SpscQueue;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 
 use crate::command::OrderCommand;
 use crate::consumer;
@@ -18,16 +18,10 @@ pub struct PipelineConfig {
     pub price_range: (Price, Price),
     /// LOB pre-allocation hint for order capacity.
     pub order_capacity: u64,
-}
-
-impl Default for PipelineConfig {
-    fn default() -> Self {
-        Self {
-            queue_slots: 4096,
-            price_range: (1, 100_000),
-            order_capacity: 10_000,
-        }
-    }
+    /// CPU core for the producer thread (`ingest_commands`);
+    pub producer_pin_core: u32,
+    /// CPU core for the consumer / matching thread;
+    pub consumer_pin_core: u32,
 }
 
 /// Aggregate results returned after the pipeline drains all commands.
@@ -56,9 +50,17 @@ impl Pipeline {
         let (producer, consumer) = queue.split();
         let done = Arc::new(AtomicBool::new(false));
 
+        core_affinity::set_for_current(CoreId {
+            id: config.producer_pin_core as usize,
+        });
+
         let done_rx = done.clone();
-        let consumer_handle =
-            thread::spawn(move || consumer::consume::<B>(consumer, done_rx, book));
+        let consumer_handle = thread::spawn(move || {
+            core_affinity::set_for_current(CoreId {
+                id: config.consumer_pin_core as usize,
+            });
+            consumer::consume::<B>(consumer, done_rx, book)
+        });
 
         Self {
             done,
@@ -271,6 +273,8 @@ mod tests {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 100,
+            producer_pin_core: 2,
+            consumer_pin_core: 3,
         });
 
         let result = pipeline.run_and_terminate(&commands);
@@ -324,6 +328,8 @@ mod tests {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 1_000,
+            producer_pin_core: 2,
+            consumer_pin_core: 3,
         })
     }
 }

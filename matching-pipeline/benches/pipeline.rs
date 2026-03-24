@@ -14,6 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         queue_slots: 4096,
         price_range: (5_500_000, 5_900_000),
         order_capacity: 30_000,
+        producer_pin_core: args.pin_core,
+        consumer_pin_core: args.pin_core_b,
     };
 
     const THROUGHPUT_ITERS: u64 = 40;
@@ -22,11 +24,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .warmup_iters(2)
         .sample_iters(THROUGHPUT_ITERS)
         .filter(args.filter.clone());
-
-    if let Some(core) = args.pin_core {
-        runner = runner.pin_core(core);
-    }
-    // TODO: pin second thread to core 3
 
     let mut report = runner.initial_report();
 
@@ -47,6 +44,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     section.add_param("sample", test_data::GOOG_SAMPLE_MESSAGE_REL_PATH);
     section.add_param("queue_slots", pipeline_config.queue_slots.to_string());
+
+    // Note: threads were pinned by pipeline, this is just to get useful msg.
+    let pin_core_note = runner.pin_to_isolated_core(pipeline_config.producer_pin_core);
+    let pin_core_b_note = runner.pin_to_isolated_core(pipeline_config.consumer_pin_core);
+    section.add_param("producer_pin_core", pin_core_note);
+    section.add_param("consumer_pin_core", pin_core_b_note);
 
     runner.push_section(section, &mut report);
     args.execute(&report)

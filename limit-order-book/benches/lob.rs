@@ -43,7 +43,10 @@ fn fill_crowded_sell(book: &mut impl LimitOrderBook) {
     }
 }
 
-fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut BenchReport) {
+fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, pin_core: u32) -> BenchReport {
+    let core_pinning_msg = runner.pin_to_isolated_core(pin_core);
+    let mut report = runner.initial_report();
+
     let prefilled_book = |price_range, order_capacity| {
         let mut b = B::with_config(price_range, order_capacity);
         fill_book(&mut b);
@@ -60,6 +63,8 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
     section.add_param("orders_per_level", ORDERS_PER_LEVEL.to_string());
     section.add_param("BENCH_ITERS", BENCH_ITERS.to_string());
     section.add_param("WARMUP_ITERS", WARMUP_ITERS.to_string());
+
+    section.add_param("Default pinned core", core_pinning_msg.to_string());
 
     // ── Commands ──────────────────────────────────────────────────────────────
 
@@ -194,7 +199,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         BENCH_ITERS,
     );
 
-    runner.push_section(section, report);
+    runner.push_section(section, &mut report);
 
     // ── Throughput (realistic mix) ─────────────────────────────────────────────
     // Realistic mix: passive adds (unfilled), aggressive adds (multiple fills), cancels, spread.
@@ -212,6 +217,7 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
     let mut section = BenchReportSection::new("Throughput (realistic mix)");
     section.add_param("book_levels", NUM_LEVELS.to_string());
     section.add_param("orders_per_level", ORDERS_PER_LEVEL.to_string());
+    section.add_param("Default pinned core", core_pinning_msg);
 
     struct ThroughputState<T: LimitOrderBook> {
         book: T,
@@ -294,7 +300,9 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, report: &mut Benc
         THROUGHPUT_OUTER_ITERS,
     );
 
-    runner.push_section(section, report);
+    runner.push_section(section, &mut report);
+
+    report
 }
 
 fn main() {
@@ -306,22 +314,17 @@ fn inner_main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArgs::parse_args();
     let version = &args.lob_version;
 
+    let pin_core = args.pin_core;
     let mut runner = BenchRunner::new(&format!("Limit Order Book ({version})"))
         .warmup_iters(WARMUP_ITERS)
         .sample_iters(100_000)
         .filter(args.filter.clone());
 
-    if let Some(core) = args.pin_core {
-        runner = runner.pin_core(core);
-    }
-
-    let mut report = runner.initial_report();
-
-    match version.as_str() {
-        "v0" => run_benchmarks::<LimitOrderBookV0>(&mut runner, &mut report),
-        "v1" => run_benchmarks::<LimitOrderBookV1>(&mut runner, &mut report),
+    let report = match version.as_str() {
+        "v0" => run_benchmarks::<LimitOrderBookV0>(&mut runner, pin_core),
+        "v1" => run_benchmarks::<LimitOrderBookV1>(&mut runner, pin_core),
         _ => return Err(format!("unknown LOB version: {version}; expected v0 or v1").into()),
-    }
+    };
 
     args.execute(&report)
 }

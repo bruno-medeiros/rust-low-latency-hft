@@ -55,7 +55,7 @@ pub struct BenchRunner {
     title: String,
     warmup_iters: u64,
     sample_iters: u64,
-    pin_core: Option<usize>,
+
     filter: Option<String>,
     results: Vec<ScenarioResult>,
     clock: Clock,
@@ -67,30 +67,32 @@ impl BenchRunner {
             title: title.to_string(),
             warmup_iters: 10_000,
             sample_iters: 100_000,
-            pin_core: None,
             filter: None,
             results: Vec::new(),
             clock: Clock::new(),
         }
     }
-
-    /// Pin the benchmark thread to a specific CPU core for more consistent latency
-    /// measurements. On unsupported platforms or invalid core indices this is a no-op
-    /// (with a warning).
-    pub fn pin_core(mut self, core: usize) -> Self {
-        let core_id = CoreId { id: core };
+    /// Pin the **current** thread to `pin_core` for latency/throughput stability.
+    /// Returns a short status string for report sections. On failure, prints a warning and returns the reason.
+    pub fn pin_to_isolated_core(&self, pin_core: u32) -> String {
+        let core_id = CoreId {
+            id: pin_core as usize,
+        };
         if core_affinity::set_for_current(core_id) {
-            self.pin_core = Some(core);
+            format!("pin core {}", pin_core)
         } else {
             let reason = match core_affinity::get_core_ids() {
                 Some(cores) => {
-                    format!("core {core} not available (available: 0..{})", cores.len())
+                    format!(
+                        "core {pin_core} not available (available: 0..{})",
+                        cores.len()
+                    )
                 }
                 None => "core affinity not supported on this platform".to_string(),
             };
             eprintln!("\n  warning: CPU pinning failed — {reason}; continuing without pinning");
+            reason
         }
-        self
     }
 
     pub fn warmup_iters(mut self, n: u64) -> Self {
@@ -109,7 +111,7 @@ impl BenchRunner {
     }
 
     pub fn initial_report(&self) -> BenchReport {
-        BenchReport::new_with_metadata(self.title.clone(), self.pin_core)
+        BenchReport::new_with_metadata(self.title.clone())
     }
 
     pub fn push_section(&mut self, mut section: BenchReportSection, report: &mut BenchReport) {

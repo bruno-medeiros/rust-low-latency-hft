@@ -39,7 +39,7 @@ jobs:
       - name: Linux benchmark tuning (best-effort)
         run: |
           set -euo pipefail
-          sudo bash "${{ github.workspace }}/run-benchmarks-linux-setup.sh" --bench-core 2
+          sudo bash "${{ github.workspace }}/run-benchmarks-linux-setup.sh"
 
       - name: Run benchmarks
         run: |

@@ -499,6 +499,7 @@ name = "matching-pipeline"
 version = "0.1.0"
 dependencies = [
  "bench-tool",
+ "core_affinity",
  "limit-order-book",
  "lockfree-queue",
  "thiserror",
