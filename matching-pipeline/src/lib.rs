@@ -1,5 +1,7 @@
 //! Matching-engine pipeline: parse order flow, queue commands, and drive the LOB.
 
+extern crate core;
+
 pub mod command;
 mod consumer;
 pub mod lobster;

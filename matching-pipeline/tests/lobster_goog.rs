@@ -21,8 +21,9 @@ fn pipeline_completes_with_consistent_book() {
         queue_slots: 4096,
         price_range: (5_500_000, 5_900_000),
         order_capacity: 30_000,
-        producer_pin_core: 2,
-        consumer_pin_core: 3,
+        core_pinning_enabled: false,
+        producer_pin_core: 0,
+        consumer_pin_core: 0,
     };
 
     let result = Pipeline::new::<LimitOrderBookV1>(config).run_and_terminate(&commands);

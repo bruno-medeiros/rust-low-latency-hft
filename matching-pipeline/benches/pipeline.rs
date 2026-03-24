@@ -1,9 +1,10 @@
 //! End-to-end pipeline throughput on the LOBSTER GOOG sample (same file and config as
 //! `tests/lobster_goog.rs`).
 
-use bench_tool::{BenchReportSection, BenchRunner, CliArgs};
+use bench_tool::{BenchReportSection, BenchRunner, CliArgs, core_pinning_disabled_by_env};
 use limit_order_book::LimitOrderBookV1;
 use matching_pipeline::{Pipeline, PipelineConfig, test_data};
+use std::ops::Not;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = CliArgs::parse_args();
@@ -14,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         queue_slots: 4096,
         price_range: (5_500_000, 5_900_000),
         order_capacity: 30_000,
+        core_pinning_enabled: core_pinning_disabled_by_env().not(),
         producer_pin_core: args.pin_core,
         consumer_pin_core: args.pin_core_b,
     };
@@ -45,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     section.add_param("sample", test_data::GOOG_SAMPLE_MESSAGE_REL_PATH);
     section.add_param("queue_slots", pipeline_config.queue_slots.to_string());
 
-    // Note: threads were pinned by pipeline, this is just to get useful msg.
+    // Note: threads were pinned by pipeline, this is just to get useful msg for metadata.
     let pin_core_note = runner.pin_to_isolated_core(pipeline_config.producer_pin_core);
     let pin_core_b_note = runner.pin_to_isolated_core(pipeline_config.consumer_pin_core);
     section.add_param("producer_pin_core", pin_core_note);

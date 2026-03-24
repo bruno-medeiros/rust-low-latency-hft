@@ -18,6 +18,8 @@ pub struct PipelineConfig {
     pub price_range: (Price, Price),
     /// LOB pre-allocation hint for order capacity.
     pub order_capacity: u64,
+    /// Whether to pin threads to cores
+    pub core_pinning_enabled: bool,
     /// CPU core for the producer thread (`ingest_commands`);
     pub producer_pin_core: u32,
     /// CPU core for the consumer / matching thread;
@@ -50,15 +52,17 @@ impl Pipeline {
         let (producer, consumer) = queue.split();
         let done = Arc::new(AtomicBool::new(false));
 
-        core_affinity::set_for_current(CoreId {
-            id: config.producer_pin_core as usize,
-        });
+        if config.core_pinning_enabled {
+            let id = config.producer_pin_core as usize;
+            core_affinity::set_for_current(CoreId { id });
+        }
 
         let done_rx = done.clone();
         let consumer_handle = thread::spawn(move || {
-            core_affinity::set_for_current(CoreId {
-                id: config.consumer_pin_core as usize,
-            });
+            if config.core_pinning_enabled {
+                let id = config.consumer_pin_core as usize;
+                core_affinity::set_for_current(CoreId { id });
+            }
             consumer::consume::<B>(consumer, done_rx, book)
         });
 
@@ -273,6 +277,7 @@ mod tests {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 100,
+            core_pinning_enabled: false,
             producer_pin_core: 2,
             consumer_pin_core: 3,
         });
@@ -328,6 +333,7 @@ mod tests {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 1_000,
+            core_pinning_enabled: true,
             producer_pin_core: 2,
             consumer_pin_core: 3,
         })

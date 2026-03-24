@@ -11,6 +11,14 @@ use limit_order_book::CountingEventSink;
 use quanta::Clock;
 use stats_alloc::{INSTRUMENTED_SYSTEM, Region, StatsAlloc};
 
+/// When this environment variable is set (any value), core pinning is disabled.
+const BENCH_TOOL_DISABLE_CORE_PINNING: &str = "BENCH_TOOL_DISABLE_CORE_PINNING";
+
+#[inline]
+pub fn core_pinning_disabled_by_env() -> bool {
+    std::env::var_os(BENCH_TOOL_DISABLE_CORE_PINNING).is_some()
+}
+
 fn histogram_to_latency_stats(hist: &Histogram<u64>) -> LatencyStats {
     LatencyStats {
         min_ns: hist.min(),
@@ -75,16 +83,19 @@ impl BenchRunner {
     /// Pin the **current** thread to `pin_core` for latency/throughput stability.
     /// Returns a short status string for report sections. On failure, prints a warning and returns the reason.
     pub fn pin_to_isolated_core(&self, pin_core: u32) -> String {
+        if core_pinning_disabled_by_env() {
+            return format!(
+                "Core pinning disabled ({})",
+                BENCH_TOOL_DISABLE_CORE_PINNING
+            );
+        }
         let core_id = CoreId {
             id: pin_core as usize,
         };
         if core_affinity::set_for_current(core_id) {
             format!("pin core {}", pin_core)
         } else {
-            let reason =
-            format!(
-                "Could not pin core {pin_core}",
-            );
+            let reason = format!("Could not pin core {pin_core}");
             eprintln!("warning: {reason}. Continuing without pinning.");
             reason
         }
