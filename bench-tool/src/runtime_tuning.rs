@@ -27,7 +27,10 @@ impl RuntimeTuningInfo {
 }
 
 /// Inserts runtime-tuning key/value rows (same labels as the benchmark report metadata table).
-pub fn append_runtime_tuning_params(params: &mut BTreeMap<String, String>, tuning: &RuntimeTuningInfo) {
+pub fn append_runtime_tuning_params(
+    params: &mut BTreeMap<String, String>,
+    tuning: &RuntimeTuningInfo,
+) {
     params.insert("Isolated CPUs".into(), tuning.isolated_cpus.clone());
     params.insert("CPU governor".into(), tuning.cpu_frequency_governor.clone());
     params.insert("Turbo / boost".into(), tuning.turbo_boost.clone());
@@ -51,8 +54,10 @@ fn detect_impl() -> RuntimeTuningInfo {
 #[cfg(target_os = "macos")]
 fn detect_impl() -> RuntimeTuningInfo {
     RuntimeTuningInfo {
-        isolated_cpus: "not applicable (macOS; no isolcpus sysfs — use thread affinity / QoS)".into(),
-        cpu_frequency_governor: "not exposed via sysfs (macOS; see `pmset -g` / Energy settings)".into(),
+        isolated_cpus: "not applicable (macOS; no isolcpus sysfs — use thread affinity / QoS)"
+            .into(),
+        cpu_frequency_governor: "not exposed via sysfs (macOS; see `pmset -g` / Energy settings)"
+            .into(),
         turbo_boost: "not exposed via sysfs (macOS)".into(),
         irq_affinity: "not applicable (macOS)".into(),
         aslr: detect_aslr_macos(),
@@ -78,7 +83,8 @@ fn detect_isolated_cpus_linux() -> String {
         Ok(s) => {
             let t = s.trim();
             if t.is_empty() {
-                "none listed (empty /sys/.../isolated; add isolcpus=… boot param for isolation)".into()
+                "none listed (empty /sys/.../isolated; add isolcpus=… boot param for isolation)"
+                    .into()
             } else {
                 t.to_string()
             }
@@ -161,14 +167,14 @@ fn detect_irq_affinity_linux() -> String {
     let mut affinities = Vec::new();
     for e in entries.flatten() {
         let p = e.path().join("smp_affinity_list");
-        if p.is_file() {
-            if let Ok(s) = std::fs::read_to_string(&p) {
-                let t = s.trim().to_string();
-                if !t.is_empty() {
-                    affinities.push(t);
-                    if affinities.len() >= SAMPLE_CAP {
-                        break;
-                    }
+        if p.is_file()
+            && let Ok(s) = std::fs::read_to_string(&p)
+        {
+            let t = s.trim().to_string();
+            if !t.is_empty() {
+                affinities.push(t);
+                if affinities.len() >= SAMPLE_CAP {
+                    break;
                 }
             }
         }
@@ -181,11 +187,7 @@ fn detect_irq_affinity_linux() -> String {
     if affinities.iter().all(|a| a == first) {
         format!("{first} (uniform across {} sampled IRQs)", affinities.len())
     } else {
-        format!(
-            "mixed ({} sampled IRQs; first={})",
-            affinities.len(),
-            first
-        )
+        format!("mixed ({} sampled IRQs; first={})", affinities.len(), first)
     }
 }
 
@@ -258,9 +260,7 @@ fn detect_aslr_macos() -> String {
 fn detect_swap_macos() -> String {
     use std::process::Command;
 
-    let out = Command::new("sysctl")
-        .args(["-n", "vm.swapusage"])
-        .output();
+    let out = Command::new("sysctl").args(["-n", "vm.swapusage"]).output();
     match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).trim().to_string(),
         Ok(o) => format!(
