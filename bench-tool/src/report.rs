@@ -12,6 +12,7 @@ use crate::comparison::{
 };
 use crate::format_unit::{fmt_bytes_f64, fmt_duration_f64};
 use crate::hardware::{HardwareInfo, detect_clock_source, detect_rustc_version};
+use crate::runtime_tuning::{RuntimeTuningInfo, append_runtime_tuning_params};
 use crate::{Renderer, fmt_duration};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +55,11 @@ pub struct ReportMetadata {
     /// Clock source used for latency measurements (e.g. "TSC (RDTSC via quanta)").
     #[serde(default)]
     pub clock_source: String,
+    /// Best-effort snapshot aligned with `run-benchmarks-linux-setup.sh` tuning targets.
+    #[serde(default)]
+    pub runtime_tuning: RuntimeTuningInfo,
+    #[serde(default)]
+    pub params: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,6 +137,9 @@ pub struct AllocStats {
 impl BenchReport {
     /// Creates a report with metadata and empty sections.
     pub fn new_with_metadata(title: String) -> Self {
+        let runtime_tuning = RuntimeTuningInfo::detect();
+        let mut params = BTreeMap::new();
+        append_runtime_tuning_params(&mut params, &runtime_tuning);
         Self {
             metadata: ReportMetadata {
                 title,
@@ -138,6 +147,8 @@ impl BenchReport {
                 hardware: HardwareInfo::detect(),
                 rustc_version: detect_rustc_version(),
                 clock_source: detect_clock_source(),
+                runtime_tuning,
+                params,
             },
             sections: Vec::new(),
         }
@@ -316,6 +327,9 @@ impl BenchReport {
             ("Rust", m.rustc_version.clone()),
             ("Clock", m.clock_source.clone()),
         ];
+        for (k, v) in &m.params {
+            props.push((k.as_str(), v.clone()));
+        }
         if let Some(b) = baseline {
             props.push((
                 "Baseline",
