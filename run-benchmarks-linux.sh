@@ -27,12 +27,12 @@ cd "$SCRIPT_DIR"
 
 sudo "$SCRIPT_DIR/run-benchmarks-linux-setup.sh"
 
-# ── Run benchmarks as the current user ────────────────────────────────────────
+# ── Run benchmarks ────────────────────────────────────────────────────────────
 
 echo ""
 echo "=== Running benchmarks ==="
 
-sudo chrt -f 90 sudo -u "$USER" -- "$SCRIPT_DIR/run-benchmarks-and-report.sh" \
+"$SCRIPT_DIR/run-benchmarks-and-report.sh" \
     --pin-core "$BENCH_CORE" \
     --pin-core-b "$BENCH_CORE_B"
 

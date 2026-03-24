@@ -34,3 +34,4 @@ See [Benchmark Methodology](Benchmark-Methodology.md) for measurement methodolog
 
 - **Scoped memory locking** — Optionally lock only hot benchmark memory (e.g. `mmap` a dedicated arena then `mlock` / `mlock2(MLOCK_ONFAULT)` on that range), or an opt-in flag for dedicated bench hosts. Whole-process `mlockall(MCL_CURRENT | MCL_FUTURE)` was removed: it is a poor fit for CI and atypical for production compared to targeted locking.
 - **Hugepage-backed allocation** (`mmap` + `MAP_HUGETLB`) for the v1 dense price-level array to reduce TLB misses.
+- **`libc::SCHED_FIFO`** Promote **only** the hot-path thread(s) after spawn using e.g. `libc::sched_setscheduler(0, libc::SCHED_FIFO, &param)` on the current thread (requires `RLIMIT_RTPRIO` / `CAP_SYS_NICE`), and leave the rest of the process on `SCHED_OTHER`.
