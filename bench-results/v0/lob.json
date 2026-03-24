@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Limit Order Book (v0)",
-    "timestamp": "2026-03-24T12:43:25Z",
+    "timestamp": "2026-03-24T15:26:12Z",
     "hardware": {
       "cpu_model": "AMD Ryzen 7 7800X3D 8-Core Processor",
       "cpu_cores": 16,
@@ -14,19 +14,19 @@
     "clock_source": "TSC (RDTSC via quanta)",
     "runtime_tuning": {
       "isolated_cpus": "2-3",
-      "cpu_frequency_governor": "performance (all 16 CPUs)",
-      "turbo_boost": "disabled (AMD cpufreq boost=0)",
+      "cpu_frequency_governor": "powersave (all 16 CPUs)",
+      "turbo_boost": "enabled (AMD cpufreq boost=1)",
       "irq_affinity": "mixed (64 sampled IRQs; first=0-15)",
-      "aslr": "disabled (randomize_va_space=0)",
+      "aslr": "enabled full (randomize_va_space=2)",
       "swap": "none active (/proc/swaps header only)"
     },
     "params": {
-      "ASLR": "disabled (randomize_va_space=0)",
-      "CPU governor": "performance (all 16 CPUs)",
+      "ASLR": "enabled full (randomize_va_space=2)",
+      "CPU governor": "powersave (all 16 CPUs)",
       "IRQ affinity (sample)": "mixed (64 sampled IRQs; first=0-15)",
       "Isolated CPUs": "2-3",
       "Swap": "none active (/proc/swaps header only)",
-      "Turbo / boost": "disabled (AMD cpufreq boost=0)"
+      "Turbo / boost": "enabled (AMD cpufreq boost=1)"
     }
   },
   "sections": [
@@ -34,7 +34,7 @@
       "title": "Latency",
       "params": {
         "BENCH_ITERS": "100000",
-        "Default pinned core": "pin core 2",
+        "Default pinned core": "Could not pin core 2",
         "WARMUP_ITERS": "10000",
         "book_levels": "100",
         "orders_per_level": "10"
@@ -44,15 +44,15 @@
           "name": "Add (passive)",
           "samples": 100000,
           "latency": {
-            "min_ns": 40,
-            "p50_ns": 50,
-            "p90_ns": 70,
-            "p95_ns": 70,
-            "p99_ns": 100,
-            "p999_ns": 170,
-            "max_ns": 531,
-            "mean_ns": 56.26740999999999,
-            "stdev_ns": 12.928850756811295
+            "min_ns": 30,
+            "p50_ns": 40,
+            "p90_ns": 60,
+            "p95_ns": 60,
+            "p99_ns": 80,
+            "p999_ns": 200,
+            "max_ns": 4087,
+            "mean_ns": 46.688660000000006,
+            "stdev_ns": 26.752395918952757
           },
           "allocations": {
             "total_allocs": 100000,
@@ -67,15 +67,15 @@
           "name": "Add (sweep 5 levels, 50 fills)",
           "samples": 100000,
           "latency": {
-            "min_ns": 1332,
-            "p50_ns": 1452,
-            "p90_ns": 1512,
-            "p95_ns": 1542,
-            "p99_ns": 1653,
-            "p999_ns": 2395,
-            "max_ns": 4451,
-            "mean_ns": 1463.0331600000006,
-            "stdev_ns": 77.09881179638504
+            "min_ns": 1122,
+            "p50_ns": 1222,
+            "p90_ns": 1272,
+            "p95_ns": 1282,
+            "p99_ns": 1342,
+            "p999_ns": 3717,
+            "max_ns": 23135,
+            "mean_ns": 1233.8326599999998,
+            "stdev_ns": 266.9995969235242
           },
           "allocations": {
             "total_allocs": 0,
@@ -90,15 +90,15 @@
           "name": "Market (sweep 10 levels, 100 fills)",
           "samples": 100000,
           "latency": {
-            "min_ns": 2664,
-            "p50_ns": 2865,
-            "p90_ns": 2955,
-            "p95_ns": 2985,
-            "p99_ns": 3297,
-            "p999_ns": 4531,
-            "max_ns": 9087,
-            "mean_ns": 2877.8086800000015,
-            "stdev_ns": 132.66736907264576
+            "min_ns": 2254,
+            "p50_ns": 2425,
+            "p90_ns": 2495,
+            "p95_ns": 2525,
+            "p99_ns": 2795,
+            "p999_ns": 5463,
+            "max_ns": 26351,
+            "mean_ns": 2444.2083999999995,
+            "stdev_ns": 396.0576033728427
           },
           "allocations": {
             "total_allocs": 0,
@@ -113,15 +113,15 @@
           "name": "Cancel (head of queue)",
           "samples": 100000,
           "latency": {
-            "min_ns": 30,
+            "min_ns": 20,
             "p50_ns": 40,
-            "p90_ns": 50,
+            "p90_ns": 40,
             "p95_ns": 50,
-            "p99_ns": 60,
-            "p999_ns": 160,
-            "max_ns": 531,
-            "mean_ns": 42.34901000000001,
-            "stdev_ns": 9.656809101349163
+            "p99_ns": 50,
+            "p999_ns": 300,
+            "max_ns": 1963,
+            "mean_ns": 39.430880000000016,
+            "stdev_ns": 16.522803709588757
           },
           "allocations": {
             "total_allocs": 0,
@@ -136,15 +136,15 @@
           "name": "Cancel (tail of queue)",
           "samples": 100000,
           "latency": {
-            "min_ns": 150,
-            "p50_ns": 160,
-            "p90_ns": 160,
+            "min_ns": 130,
+            "p50_ns": 150,
+            "p90_ns": 150,
             "p95_ns": 160,
-            "p99_ns": 170,
-            "p999_ns": 240,
-            "max_ns": 430,
-            "mean_ns": 158.4741,
-            "stdev_ns": 6.589433146333605
+            "p99_ns": 160,
+            "p999_ns": 170,
+            "max_ns": 2765,
+            "mean_ns": 148.9041299999999,
+            "stdev_ns": 29.642180738655178
           },
           "allocations": {
             "total_allocs": 0,
@@ -162,12 +162,12 @@
             "min_ns": 1,
             "p50_ns": 10,
             "p90_ns": 10,
-            "p95_ns": 20,
+            "p95_ns": 10,
             "p99_ns": 20,
-            "p999_ns": 30,
-            "max_ns": 350,
-            "mean_ns": 9.888349999999999,
-            "stdev_ns": 4.463819471876075
+            "p999_ns": 20,
+            "max_ns": 3145,
+            "mean_ns": 7.953160000000001,
+            "stdev_ns": 10.744938623109952
           },
           "allocations": {
             "total_allocs": 0,
@@ -182,15 +182,15 @@
           "name": "Depth (top 5)",
           "samples": 100000,
           "latency": {
-            "min_ns": 20,
+            "min_ns": 10,
             "p50_ns": 40,
             "p90_ns": 50,
             "p95_ns": 50,
-            "p99_ns": 70,
-            "p999_ns": 280,
-            "max_ns": 791,
-            "mean_ns": 43.308780000000006,
-            "stdev_ns": 15.151628787414245
+            "p99_ns": 50,
+            "p999_ns": 380,
+            "max_ns": 3717,
+            "mean_ns": 43.15047000000001,
+            "stdev_ns": 24.702417468318767
           },
           "allocations": {
             "total_allocs": 100000,
@@ -205,15 +205,15 @@
           "name": "Order lookup (hit)",
           "samples": 100000,
           "latency": {
-            "min_ns": 10,
+            "min_ns": 1,
             "p50_ns": 20,
-            "p90_ns": 20,
+            "p90_ns": 30,
             "p95_ns": 30,
             "p99_ns": 30,
-            "p999_ns": 60,
-            "max_ns": 470,
-            "mean_ns": 19.657899999999998,
-            "stdev_ns": 5.947265555698685
+            "p999_ns": 210,
+            "max_ns": 2935,
+            "mean_ns": 23.275080000000003,
+            "stdev_ns": 15.479513267334992
           },
           "allocations": {
             "total_allocs": 0,
@@ -228,15 +228,15 @@
           "name": "Realistic mix (per-op)",
           "samples": 100000,
           "latency": {
-            "min_ns": 10,
-            "p50_ns": 60,
+            "min_ns": 1,
+            "p50_ns": 50,
             "p90_ns": 80,
             "p95_ns": 90,
-            "p99_ns": 110,
-            "p999_ns": 240,
-            "max_ns": 661,
-            "mean_ns": 60.437410000000014,
-            "stdev_ns": 20.085982238663362
+            "p99_ns": 100,
+            "p999_ns": 320,
+            "max_ns": 3467,
+            "mean_ns": 55.774820000000005,
+            "stdev_ns": 34.65720637858164
           },
           "allocations": {
             "total_allocs": 40000,
@@ -252,7 +252,7 @@
     {
       "title": "Throughput (realistic mix)",
       "params": {
-        "Default pinned core": "pin core 2",
+        "Default pinned core": "Could not pin core 2",
         "book_levels": "100",
         "orders_per_level": "10"
       },
@@ -260,7 +260,7 @@
         {
           "name": "Throughput (realistic mix)",
           "samples": 2000000,
-          "throughput_ops_per_sec": 25323331.806200314,
+          "throughput_ops_per_sec": 23502587.054712534,
           "allocations": {
             "total_allocs": 76000646,
             "total_deallocs": 70000011,

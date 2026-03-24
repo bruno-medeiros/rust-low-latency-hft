@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "Matching pipeline",
-    "timestamp": "2026-03-24T12:56:31Z",
+    "timestamp": "2026-03-24T15:36:40Z",
     "hardware": {
       "cpu_model": "AMD Ryzen 7 7800X3D 8-Core Processor",
       "cpu_cores": 16,
@@ -14,27 +14,27 @@
     "clock_source": "TSC (RDTSC via quanta)",
     "runtime_tuning": {
       "isolated_cpus": "2-3",
-      "cpu_frequency_governor": "performance (all 16 CPUs)",
-      "turbo_boost": "disabled (AMD cpufreq boost=0)",
+      "cpu_frequency_governor": "powersave (all 16 CPUs)",
+      "turbo_boost": "enabled (AMD cpufreq boost=1)",
       "irq_affinity": "mixed (64 sampled IRQs; first=0-15)",
-      "aslr": "disabled (randomize_va_space=0)",
+      "aslr": "enabled full (randomize_va_space=2)",
       "swap": "none active (/proc/swaps header only)"
     },
     "params": {
-      "ASLR": "disabled (randomize_va_space=0)",
-      "CPU governor": "performance (all 16 CPUs)",
+      "ASLR": "enabled full (randomize_va_space=2)",
+      "CPU governor": "powersave (all 16 CPUs)",
       "IRQ affinity (sample)": "mixed (64 sampled IRQs; first=0-15)",
       "Isolated CPUs": "2-3",
       "Swap": "none active (/proc/swaps header only)",
-      "Turbo / boost": "disabled (AMD cpufreq boost=0)"
+      "Turbo / boost": "enabled (AMD cpufreq boost=1)"
     }
   },
   "sections": [
     {
       "title": "",
       "params": {
-        "consumer_pin_core": "pin core 3",
-        "producer_pin_core": "pin core 2",
+        "consumer_pin_core": "Could not pin core 3",
+        "producer_pin_core": "Could not pin core 2",
         "queue_slots": "4096",
         "sample": "LOBSTER_SampleFiles/GOOG_2012-06-21_34200000_57600000_message_1.csv"
       },
@@ -42,7 +42,7 @@
         {
           "name": "Pipeline (Lobster data)",
           "samples": 40,
-          "throughput_ops_per_sec": 11841699.625547018,
+          "throughput_ops_per_sec": 14307755.981386404,
           "allocations": {
             "total_allocs": 10,
             "total_deallocs": 0,
@@ -52,7 +52,7 @@
             "avg_bytes_per_op": 0.0
           },
           "setup_allocs": 10,
-          "setup_bytes": 22845960,
+          "setup_bytes": 22845952,
           "event_counts": {
             "accepted": 961579,
             "rejected": 224768,

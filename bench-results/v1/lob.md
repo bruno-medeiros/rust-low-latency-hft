@@ -3,7 +3,7 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-03-24T12:47:28Z |
+| Timestamp | 2026-03-24T15:29:29Z |
 | CPU | AMD Ryzen 7 7800X3D 8-Core Processor |
 | Cores | 16 |
 | Memory | 30.5 GB |
@@ -11,20 +11,20 @@
 | Host | mint |
 | Rust | rustc 1.91.1 (ed61e7d7e 2025-11-07) |
 | Clock | TSC (RDTSC via quanta) |
-| ASLR | disabled (randomize_va_space=0) |
-| CPU governor | performance (all 16 CPUs) |
+| ASLR | enabled full (randomize_va_space=2) |
+| CPU governor | powersave (all 16 CPUs) |
 | IRQ affinity (sample) | mixed (64 sampled IRQs; first=0-15) |
 | Isolated CPUs | 2-3 |
 | Swap | none active (/proc/swaps header only) |
-| Turbo / boost | disabled (AMD cpufreq boost=0) |
-| Baseline | "Limit Order Book (v0)" (2026-03-24T12:43:25Z) |
+| Turbo / boost | enabled (AMD cpufreq boost=1) |
+| Baseline | "Limit Order Book (v0)" (2026-03-24T15:26:12Z) |
 
 ## Latency
 
 | Property | Value |
 |----------|-------|
 | BENCH_ITERS | 100000 |
-| Default pinned core | pin core 2 |
+| Default pinned core | Could not pin core 2 |
 | WARMUP_ITERS | 10000 |
 | book_levels | 100 |
 | orders_per_level | 10 |
@@ -33,35 +33,35 @@
 
 | Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Add (passive) | 40ns | 60ns | 70ns | 70ns | 80ns | 450ns | 661ns | 61ns | 20ns | 0.0 | 0.0 | 0B |
-| Add (sweep 5 levels, 50 fills) | 781ns | 851ns | 891ns | 901ns | 1.1μs | 1.6μs | 2.8μs | 856ns | 60ns | 0.0 | 0.0 | 0B |
-| Market (sweep 10 levels, 100 fills) | 1.5μs | 1.6μs | 1.7μs | 1.7μs | 1.8μs | 2.6μs | 4.7μs | 1.6μs | 70ns | 0.0 | 0.0 | 0B |
-| Cancel (head of queue) | 30ns | 50ns | 60ns | 60ns | 80ns | 290ns | 470ns | 51ns | 15ns | 0.0 | 0.0 | 0B |
-| Cancel (tail of queue) | 20ns | 50ns | 60ns | 70ns | 80ns | 310ns | 490ns | 54ns | 16ns | 0.0 | 0.0 | 0B |
-| Spread (BBO query) | 1ns | 10ns | 10ns | 10ns | 10ns | 50ns | 160ns | 8ns | 3ns | 0.0 | 0.0 | 0B |
-| Depth (top 5) | 110ns | 160ns | 170ns | 180ns | 220ns | 1.1μs | 1.6μs | 163ns | 49ns | 2.0 | 1.0 | 128B |
-| Order lookup (hit) | 1ns | 10ns | 20ns | 20ns | 20ns | 80ns | 320ns | 12ns | 5ns | 0.0 | 0.0 | 0B |
-| Realistic mix (per-op) | 1ns | 70ns | 90ns | 90ns | 110ns | 430ns | 781ns | 68ns | 26ns | 0.0 | 0.0 | 0B |
+| Add (passive) | 20ns | 50ns | 50ns | 60ns | 60ns | 460ns | 4.3μs | 49ns | 33ns | 0.0 | 0.0 | 0B |
+| Add (sweep 5 levels, 50 fills) | 651ns | 691ns | 721ns | 731ns | 771ns | 1.6μs | 13.9μs | 701ns | 131ns | 0.0 | 0.0 | 0B |
+| Market (sweep 10 levels, 100 fills) | 1.3μs | 1.3μs | 1.4μs | 1.4μs | 1.5μs | 4.4μs | 14.9μs | 1.3μs | 187ns | 0.0 | 0.0 | 0B |
+| Cancel (head of queue) | 30ns | 40ns | 50ns | 50ns | 60ns | 360ns | 2.8μs | 42ns | 20ns | 0.0 | 0.0 | 0B |
+| Cancel (tail of queue) | 20ns | 40ns | 40ns | 50ns | 50ns | 350ns | 10.4μs | 40ns | 47ns | 0.0 | 0.0 | 0B |
+| Spread (BBO query) | 1ns | 10ns | 10ns | 10ns | 10ns | 70ns | 270ns | 7ns | 5ns | 0.0 | 0.0 | 0B |
+| Depth (top 5) | 90ns | 130ns | 140ns | 150ns | 160ns | 951ns | 11.4μs | 133ns | 76ns | 2.0 | 1.0 | 128B |
+| Order lookup (hit) | 1ns | 10ns | 20ns | 20ns | 20ns | 90ns | 9.5μs | 11ns | 30ns | 0.0 | 0.0 | 0B |
+| Realistic mix (per-op) | 1ns | 60ns | 70ns | 80ns | 90ns | 440ns | 10.5μs | 58ns | 44ns | 0.0 | 0.0 | 0B |
 
 #### vs baseline
 
 | Operation | p50 | p99 | p99.9 | mean | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-------|------|-----------|-------------|----------|
-| Add (passive) | 60ns (↑20.0%) | 80ns (↓20.0%) | 450ns (↑164.7%) | 61ns (↑8.7%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
-| Add (sweep 5 levels, 50 fills) | 851ns (↓41.4%) | 1.1μs (↓34.5%) | 1.6μs (↓31.8%) | 856ns (↓41.4%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
-| Market (sweep 10 levels, 100 fills) | 1.6μs (↓43.4%) | 1.8μs (↓46.2%) | 2.6μs (↓43.4%) | 1.6μs (↓43.2%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
-| Cancel (head of queue) | 50ns (↑25.0%) | 80ns (↑33.3%) | 290ns (↑81.2%) | 51ns (↑21.6%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Cancel (tail of queue) | 50ns (↓68.8%) | 80ns (↓52.9%) | 310ns (↑29.2%) | 54ns (↓65.9%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Spread (BBO query) | 10ns (=) | 10ns (↓50.0%) | 50ns (↑66.7%) | 8ns (↓11.0%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Depth (top 5) | 160ns (↑300.0%) | 220ns (↑214.3%) | 1.1μs (↑282.9%) | 163ns (↑278.4%) | 2.0 (↑100.0%) | 1.0 (=) | 128B (↑60.0%) |
-| Order lookup (hit) | 10ns (↓50.0%) | 20ns (↓33.3%) | 80ns (↑33.3%) | 12ns (↓38.8%) | 0.0 (=) | 0.0 (=) | 0B (=) |
-| Realistic mix (per-op) | 70ns (↑16.7%) | 110ns (=) | 430ns (↑79.2%) | 68ns (↑14.0%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
+| Add (passive) | 50ns (↑25.0%) | 60ns (↓25.0%) | 460ns (↑130.0%) | 49ns (↑6.5%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
+| Add (sweep 5 levels, 50 fills) | 691ns (↓43.5%) | 771ns (↓42.5%) | 1.6μs (↓58.0%) | 701ns (↓43.1%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
+| Market (sweep 10 levels, 100 fills) | 1.3μs (↓45.1%) | 1.5μs (↓48.1%) | 4.4μs (↓19.3%) | 1.3μs (↓45.0%) | 0.0 (=) | 0.0 (↓100.0%) | 0B (=) |
+| Cancel (head of queue) | 40ns (=) | 60ns (↑20.0%) | 360ns (↑20.0%) | 42ns (↑7.6%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Cancel (tail of queue) | 40ns (↓73.3%) | 50ns (↓68.8%) | 350ns (↑105.9%) | 40ns (↓72.8%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Spread (BBO query) | 10ns (=) | 10ns (↓50.0%) | 70ns (↑250.0%) | 7ns (↓6.0%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Depth (top 5) | 130ns (↑225.0%) | 160ns (↑220.0%) | 951ns (↑150.3%) | 133ns (↑209.9%) | 2.0 (↑100.0%) | 1.0 (=) | 128B (↑60.0%) |
+| Order lookup (hit) | 10ns (↓50.0%) | 20ns (↓33.3%) | 90ns (↓57.1%) | 11ns (↓51.6%) | 0.0 (=) | 0.0 (=) | 0B (=) |
+| Realistic mix (per-op) | 60ns (↑20.0%) | 90ns (↓10.0%) | 440ns (↑37.5%) | 58ns (↑5.0%) | 0.0 (↓100.0%) | 0.0 (=) | 0B (↓100.0%) |
 
 ## Throughput (realistic mix)
 
 | Property | Value |
 |----------|-------|
-| Default pinned core | pin core 2 |
+| Default pinned core | Could not pin core 2 |
 | book_levels | 100 |
 | orders_per_level | 10 |
 
@@ -69,13 +69,13 @@
 
 | Scenario | ops/sec | allocs/op | deallocs/op | bytes/op | setup allocs | setup bytes |
 |----------|---------|-----------|-------------|----------|--------------|-------------|
-| Throughput (realistic mix) | 44.0M | 0.0 | 0.0 | 0B | 3 | 1.9MiB |
+| Throughput (realistic mix) | 52.8M | 0.0 | 0.0 | 0B | 3 | 1.9MiB |
 
 #### vs baseline
 
 | Operation | ops/sec | allocs/op | deallocs/op | bytes/op | setup allocs | setup bytes |
 |-----------|---------|-----------|-------------|----------|--------------|-------------|
-| Throughput (realistic mix) | 44.0M (↑73.9%) | 0.0 (↓100.0%) | 0.0 (↓100.0%) | 0B (↓100.0%) | 3.0 (↓99.5%) | 1.9MiB (↑298.5%) |
+| Throughput (realistic mix) | 52.8M (↑124.6%) | 0.0 (↓100.0%) | 0.0 (↓100.0%) | 0B (↓100.0%) | 3.0 (↓99.5%) | 1.9MiB (↑298.5%) |
 
 | Scenario | Accepted | Rejected | Fill | Filled | Cancelled |
 |----------|----------|----------|------|--------|-----------|
