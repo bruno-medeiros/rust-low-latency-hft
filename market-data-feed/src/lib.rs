@@ -2,10 +2,12 @@
 
 pub mod decode;
 pub mod error;
+pub mod feed_book;
 pub mod ingest;
 pub mod message;
 
 pub use decode::ItchDecoder;
 pub use error::{DecodeError, IngestError};
+pub use feed_book::{FeedBookAction, FeedBookAdapter, FeedBookError};
 pub use ingest::DatagramIngestor;
 pub use message::{ItchMessage, Side};

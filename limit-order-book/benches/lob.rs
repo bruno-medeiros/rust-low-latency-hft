@@ -127,6 +127,17 @@ fn run_benchmarks<B: LimitOrderBook>(runner: &mut BenchRunner, pin_core: u32) ->
         BENCH_ITERS,
     );
 
+    // Reduce remaining quantity without removing the order (partial cancel/execute path).
+    runner.run_latency(
+        "Reduce (partial)",
+        || prefilled_book(PRICE_RANGE, ORDER_CAPACITY),
+        |book| {
+            let mut sink = CountingEventSink::default();
+            book.reduce_order(1, 50, &mut sink);
+        },
+        BENCH_ITERS,
+    );
+
     // ── Queries ───────────────────────────────────────────────────────────────
 
     // Best bid + best ask — primary read path for both sides.

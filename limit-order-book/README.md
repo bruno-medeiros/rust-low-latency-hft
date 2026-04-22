@@ -1,27 +1,12 @@
 # Limit Order Book
 
 A single-instrument limit order book written in Rust.
+It supports both direct matching commands and feed-driven resting-order lifecycle updates (add/reduce/cancel) through its public API.
 
 ## Operations
 
-### Commands
-
-| Operation | Description |
-|---|---|
-| **Add limit order** | Insert an order with side, price, quantity, and ID. Immediately matches against the opposite side if prices cross; any remaining quantity rests in the book. |
-| **Add market order** | Match against the opposite side at the best available prices until filled. Unfilled remainder is cancelled (never rests). |
-| **Cancel order** | Remove a resting order by ID. Rejects if the order is unknown. |
-
-All commands return a sequence of events: `Accepted`, `Fill`, `Filled`, `Cancelled`, or `Rejected`.
-
-### Queries
-
-| Query | Description |
-|---|---|
-| **Best bid / best ask** | Price and aggregate quantity at the top of each side. |
-| **Spread** | Distance between best ask and best bid. |
-| **Depth** | Top N price levels on a given side with aggregate quantity per level. |
-| **Order lookup** | Current state of a resting order by ID. |
+Command and query API docs live on the `LimitOrderBook` trait:
+[`src/book_api.rs`](src/book_api.rs).
 
 ### Matching Rules
 
@@ -29,13 +14,17 @@ All commands return a sequence of events: `Accepted`, `Fill`, `Filled`, `Cancell
 - **Partial fills.** An incoming order can match across multiple resting orders and price levels.
 - Every event carries a monotonically increasing sequence number for deterministic replay.
 
+### Implementation (v0)
+
+A non-optimized, non-low-latency version used as baseline for benchmarks.
+
 ### Non-functional Requirements
 
 - **Latency.** All operations target single-digit microsecond latency. Best bid/ask queries must be the fastest path.
 - **Determinism.** Identical input sequences must produce identical output sequences — no non-deterministic behavior.
 - **No allocation on the hot path.** The critical matching loop must not trigger heap allocations during steady-state operation.
 
-## Implementation (v1)
+### Implementation (v1)
 
 The low-latency implementation uses these data structures:
 

@@ -66,6 +66,47 @@ pub fn cancel_one_of_many_at_same_price(mut book: impl LimitOrderBook) {
     assert!(book.order(3).is_some());
 }
 
+pub fn reduce_unknown_order(mut book: impl LimitOrderBook) {
+    let events = book.reduce_order_vec(999, 1);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].kind,
+        EventKind::rejected(999, RejectReason::UnknownOrder)
+    );
+}
+
+pub fn reduce_order_rejects_zero_quantity(mut book: impl LimitOrderBook) {
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
+    let events = book.reduce_order_vec(1, 0);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].kind,
+        EventKind::rejected(1, RejectReason::InvalidQuantity)
+    );
+    assert_eq!(book.best_ask(), Some((100, 10)));
+}
+
+pub fn reduce_order_partial_reduces_resting_qty(mut book: impl LimitOrderBook) {
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
+    let events = book.reduce_order_vec(1, 4);
+    assert!(events.is_empty(), "partial reduce should not emit events");
+    assert_eq!(book.order_count(), 1);
+    assert_eq!(book.best_ask(), Some((100, 6)));
+    let order = book.order(1).expect("order remains after partial reduce");
+    assert_eq!(order.qty, 10);
+    assert_eq!(order.remaining_qty, 6);
+}
+
+pub fn reduce_order_full_reduction_removes_order(mut book: impl LimitOrderBook) {
+    book.add_limit_order_vec(1, Side::Sell, 100, 10);
+    let events = book.reduce_order_vec(1, 10);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, EventKind::cancelled(1, 10));
+    assert_eq!(book.order_count(), 0);
+    assert_eq!(book.best_ask(), None);
+    assert!(book.order(1).is_none());
+}
+
 pub fn reject_duplicate_id(mut book: impl LimitOrderBook) {
     book.add_limit_order_vec(1, Side::Buy, 100, 10);
     let events = book.add_limit_order_vec(1, Side::Buy, 101, 5);

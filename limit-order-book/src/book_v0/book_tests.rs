@@ -32,6 +32,26 @@ fn cancel_unknown_order() {
 }
 
 #[test]
+fn reduce_unknown_order() {
+    book_tests_common::reduce_unknown_order(LimitOrderBookV0::new());
+}
+
+#[test]
+fn reduce_order_partial_reduces_resting_qty() {
+    book_tests_common::reduce_order_partial_reduces_resting_qty(LimitOrderBookV0::new());
+}
+
+#[test]
+fn reduce_order_full_reduction_removes_order() {
+    book_tests_common::reduce_order_full_reduction_removes_order(LimitOrderBookV0::new());
+}
+
+#[test]
+fn reduce_order_rejects_zero_quantity() {
+    book_tests_common::reduce_order_rejects_zero_quantity(LimitOrderBookV0::new());
+}
+
+#[test]
 fn cancel_one_of_many_at_same_price() {
     book_tests_common::cancel_one_of_many_at_same_price(LimitOrderBookV0::new());
 }

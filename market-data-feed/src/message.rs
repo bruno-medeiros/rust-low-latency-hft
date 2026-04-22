@@ -19,5 +19,6 @@ pub enum ItchMessage<'a> {
     },
     OrderExecuted { oid: u64, qty: u32 },
     OrderCanceled { oid: u64, qty: u32 },
+    // TODO: review what this itch message will be needed for.
     Trade { oid: u64, side: Side, qty: u32, price: u32 },
 }

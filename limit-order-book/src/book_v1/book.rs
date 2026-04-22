@@ -342,6 +342,35 @@ impl LimitOrderBookV1 {
         }
     }
 
+    pub fn reduce_order(&mut self, order_id: OrderId, qty: Qty, events: &mut impl EventSink) {
+        if self.validate_order_qty(order_id, qty, events) {
+            return;
+        }
+
+        let Some(order_key) = self.orders.order_key(order_id) else {
+            self.emit(
+                events,
+                EventKind::rejected(order_id, RejectReason::UnknownOrder),
+            );
+            return;
+        };
+
+        let remaining_qty = self.orders.slot(order_key).order.remaining_qty;
+        if qty >= remaining_qty {
+            let order_slot = self.remove_order(order_key);
+            self.emit(
+                events,
+                EventKind::cancelled(order_id, order_slot.order.remaining_qty),
+            );
+            return;
+        }
+
+        let order = &mut self.orders.slot_mut(order_key).order;
+        let price = order.price;
+        order.remaining_qty -= qty;
+        self.price_levels.existing_level(price).reduce_qty(qty);
+    }
+
     fn remove_order(&mut self, order_key: OrderSlabKey) -> OrderSlot {
         let order_slot = self.orders.remove_by_key(order_key);
 
@@ -494,6 +523,10 @@ impl LimitOrderBook for LimitOrderBookV1 {
 
     fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink) {
         LimitOrderBookV1::cancel_order(self, order_id, events)
+    }
+
+    fn reduce_order(&mut self, order_id: OrderId, qty: Qty, events: &mut impl EventSink) {
+        LimitOrderBookV1::reduce_order(self, order_id, qty, events)
     }
 }
 
