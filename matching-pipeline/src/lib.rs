@@ -11,4 +11,4 @@ pub mod test_data;
 pub use command::OrderCommand;
 pub use limit_order_book::types::{OrderId, Price, Qty, Side};
 pub use lobster::{LobsterEventType, LobsterParseError, LobsterParser, LobsterRow};
-pub use pipeline::{Pipeline, PipelineConfig, PipelineResult};
+pub use pipeline::{MatchingPipeline, PipelineConfig, PipelineResult};

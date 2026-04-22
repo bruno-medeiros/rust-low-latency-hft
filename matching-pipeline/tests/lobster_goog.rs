@@ -2,7 +2,7 @@
 //! (GOOG 2012-06-21, level 1).
 
 use limit_order_book::LimitOrderBookV1;
-use matching_pipeline::{Pipeline, PipelineConfig, test_data};
+use matching_pipeline::{MatchingPipeline, PipelineConfig, test_data};
 
 #[test]
 fn extracts_expected_command_count() {
@@ -26,7 +26,7 @@ fn pipeline_completes_with_consistent_book() {
         consumer_pin_core: 0,
     };
 
-    let result = Pipeline::new::<LimitOrderBookV1>(config).run_and_terminate(&commands);
+    let result = MatchingPipeline::new::<LimitOrderBookV1>(config).run_and_terminate(&commands);
 
     assert_eq!(result.commands_processed, num_commands);
     assert!(result.events.accepted > 0);

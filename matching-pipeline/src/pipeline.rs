@@ -36,13 +36,13 @@ pub struct PipelineResult {
 }
 
 /// Two-thread matching-engine pipeline.
-pub struct Pipeline {
+pub struct MatchingPipeline {
     pub done: Arc<AtomicBool>,
     pub consumer_handle: thread::JoinHandle<PipelineResult>,
     pub producer: lockfree_queue::spsc::SpscProducer<OrderCommand>,
 }
 
-impl Pipeline {
+impl MatchingPipeline {
     pub fn new<B: LimitOrderBook + Send + 'static>(config: PipelineConfig) -> Self {
         let price_range = config.price_range;
         let order_capacity = config.order_capacity;
@@ -273,7 +273,7 @@ mod tests {
         let rows = parser.parse_messages(csv).unwrap();
         let commands = parser.extract_commands(&rows);
 
-        let pipeline = Pipeline::new::<LimitOrderBookV1>(PipelineConfig {
+        let pipeline = MatchingPipeline::new::<LimitOrderBookV1>(PipelineConfig {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 100,
@@ -328,8 +328,8 @@ mod tests {
         assert_eq!(result.final_order_count, 1);
     }
 
-    fn test_pipeline() -> Pipeline {
-        Pipeline::new::<LimitOrderBookV1>(PipelineConfig {
+    fn test_pipeline() -> MatchingPipeline {
+        MatchingPipeline::new::<LimitOrderBookV1>(PipelineConfig {
             queue_slots: 64,
             price_range: (1, 10_000),
             order_capacity: 1_000,

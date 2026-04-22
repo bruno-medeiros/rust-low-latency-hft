@@ -3,7 +3,7 @@
 
 use bench_tool::{BenchReportSection, BenchRunner, CliArgs, core_pinning_disabled_by_env};
 use limit_order_book::LimitOrderBookV1;
-use matching_pipeline::{Pipeline, PipelineConfig, test_data};
+use matching_pipeline::{MatchingPipeline, PipelineConfig, test_data};
 use std::ops::Not;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     runner.run_throughput(
         "Pipeline (Lobster data)",
-        || Pipeline::new::<LimitOrderBookV1>(pipeline_config),
+        || MatchingPipeline::new::<LimitOrderBookV1>(pipeline_config),
         |pipeline| pipeline.run_and_terminate(&[]).events,
         move |pipeline, op_count| {
             let n = cmds.len() as u64;
