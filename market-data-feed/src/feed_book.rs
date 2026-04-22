@@ -1,5 +1,5 @@
 use crate::message::{ItchMessage, Side as FeedSide};
-use limit_order_book::event::EventSink;
+use limit_order_book::event::BookEventSink;
 use limit_order_book::types::{OrderId, Side as BookSide};
 use limit_order_book::LimitOrderBook;
 use thiserror::Error;
@@ -37,7 +37,7 @@ impl FeedBookAdapter {
         &mut self,
         book: &mut B,
         msg: &ItchMessage<'_>,
-        events: &mut impl EventSink,
+        events: &mut impl BookEventSink,
     ) -> Result<FeedBookAction, FeedBookError> {
         match msg {
             ItchMessage::SystemEvent { .. } => Ok(FeedBookAction::IgnoredSystemEvent),

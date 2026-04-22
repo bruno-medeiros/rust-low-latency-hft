@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use limit_order_book::event::CountingEventSink;
-use limit_order_book::{EventSink, LimitOrderBook};
+use limit_order_book::{BookEventSink, LimitOrderBook};
 use lockfree_queue::spsc::SpscConsumer;
 
 use crate::command::OrderCommand;
@@ -44,7 +44,7 @@ pub(crate) fn consume<B: LimitOrderBook>(
     }
 }
 
-fn dispatch(book: &mut impl LimitOrderBook, cmd: OrderCommand, events: &mut impl EventSink) {
+fn dispatch(book: &mut impl LimitOrderBook, cmd: OrderCommand, events: &mut impl BookEventSink) {
     match cmd {
         OrderCommand::NewOrder {
             order_id,

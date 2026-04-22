@@ -1,4 +1,4 @@
-use crate::event::{Event, EventSink};
+use crate::event::{BookEvent, BookEventSink};
 use crate::order::Order;
 use crate::types::{OrderId, Price, Qty, Side};
 
@@ -41,7 +41,7 @@ pub trait LimitOrderBook {
         side: Side,
         price: Price,
         qty: Qty,
-        events: &mut impl EventSink,
+        events: &mut impl BookEventSink,
     );
 
     /// Insert a market order with side, quantity, and ID.
@@ -56,17 +56,17 @@ pub trait LimitOrderBook {
         order_id: OrderId,
         side: Side,
         qty: Qty,
-        events: &mut impl EventSink,
+        events: &mut impl BookEventSink,
     );
 
     /// Remove a resting order by ID.
     ///
     /// Rejects with `UnknownOrder` if the order ID is not currently resting.
-    fn cancel_order(&mut self, order_id: OrderId, events: &mut impl EventSink);
+    fn cancel_order(&mut self, order_id: OrderId, events: &mut impl BookEventSink);
 
     /// Reduce an existing resting order by `qty`.
     /// If `qty` is greater than or equal to the remaining quantity, this removes the order.
-    fn reduce_order(&mut self, order_id: OrderId, qty: Qty, events: &mut impl EventSink);
+    fn reduce_order(&mut self, order_id: OrderId, qty: Qty, events: &mut impl BookEventSink);
 
     fn add_limit_order_vec(
         &mut self,
@@ -74,25 +74,25 @@ pub trait LimitOrderBook {
         side: Side,
         price: Price,
         qty: Qty,
-    ) -> Vec<Event> {
+    ) -> Vec<BookEvent> {
         let mut events = Vec::new();
         self.add_limit_order(order_id, side, price, qty, &mut events);
         events
     }
 
-    fn add_market_order_vec(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<Event> {
+    fn add_market_order_vec(&mut self, order_id: OrderId, side: Side, qty: Qty) -> Vec<BookEvent> {
         let mut events = Vec::new();
         self.add_market_order(order_id, side, qty, &mut events);
         events
     }
 
-    fn cancel_order_vec(&mut self, order_id: OrderId) -> Vec<Event> {
+    fn cancel_order_vec(&mut self, order_id: OrderId) -> Vec<BookEvent> {
         let mut events = Vec::new();
         self.cancel_order(order_id, &mut events);
         events
     }
 
-    fn reduce_order_vec(&mut self, order_id: OrderId, qty: Qty) -> Vec<Event> {
+    fn reduce_order_vec(&mut self, order_id: OrderId, qty: Qty) -> Vec<BookEvent> {
         let mut events = Vec::new();
         self.reduce_order(order_id, qty, &mut events);
         events

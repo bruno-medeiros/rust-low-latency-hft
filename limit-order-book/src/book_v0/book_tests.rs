@@ -1,7 +1,7 @@
 use crate::book_tests_common;
 use crate::book_v0::book::LimitOrderBookV0;
 use crate::book_v0::price_level::PriceLevel;
-use crate::event::EventKind;
+use crate::event::BookEventKind;
 use crate::order::Order;
 use crate::types::Side;
 use std::collections::HashMap;
@@ -179,7 +179,7 @@ fn fulfill_in_price_level_fills_multiple_passive_orders() {
 
     let fills: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e.kind, EventKind::Fill { .. }))
+        .filter(|e| matches!(e.kind, BookEventKind::Fill { .. }))
         .collect();
     assert_eq!(
         fills.len(),
@@ -189,7 +189,7 @@ fn fulfill_in_price_level_fills_multiple_passive_orders() {
 
     assert!(matches!(
         fills[0].kind,
-        EventKind::Fill {
+        BookEventKind::Fill {
             passive_order_id: 1,
             aggressor_order_id: 100,
             price: 50,
@@ -198,7 +198,7 @@ fn fulfill_in_price_level_fills_multiple_passive_orders() {
     ));
     assert!(matches!(
         fills[1].kind,
-        EventKind::Fill {
+        BookEventKind::Fill {
             passive_order_id: 2,
             aggressor_order_id: 100,
             price: 50,
@@ -207,7 +207,7 @@ fn fulfill_in_price_level_fills_multiple_passive_orders() {
     ));
     assert!(matches!(
         fills[2].kind,
-        EventKind::Fill {
+        BookEventKind::Fill {
             passive_order_id: 3,
             aggressor_order_id: 100,
             price: 50,
@@ -273,13 +273,13 @@ fn fulfill_in_price_level_exhausts_all_passive_orders() {
 
     let fills: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e.kind, EventKind::Fill { .. }))
+        .filter(|e| matches!(e.kind, BookEventKind::Fill { .. }))
         .collect();
     assert_eq!(fills.len(), 3, "all three passive orders should be filled");
 
     let filled: Vec<_> = events
         .iter()
-        .filter(|e| matches!(e.kind, EventKind::Filled { .. }))
+        .filter(|e| matches!(e.kind, BookEventKind::Filled { .. }))
         .collect();
     assert_eq!(
         filled.len(),

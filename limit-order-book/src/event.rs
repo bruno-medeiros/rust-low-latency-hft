@@ -2,17 +2,17 @@ use crate::types::{OrderId, Price, Qty};
 use serde::{Deserialize, Serialize};
 
 /// Sink for order book events. Implementations receive events from [`crate::LimitOrderBook`] commands.
-pub trait EventSink {
-    fn push(&mut self, event: Event);
+pub trait BookEventSink {
+    fn push(&mut self, event: BookEvent);
 }
 
-impl EventSink for Vec<Event> {
-    fn push(&mut self, event: Event) {
+impl BookEventSink for Vec<BookEvent> {
+    fn push(&mut self, event: BookEvent) {
         Vec::push(self, event);
     }
 }
 
-/// Event sink that counts events per [`EventKind`] variant. Useful for benchmarks or when only
+/// Event sink that counts events per [`BookEventKind`] variant. Useful for benchmarks or when only
 /// aggregate counts are needed.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CountingEventSink {
@@ -23,26 +23,26 @@ pub struct CountingEventSink {
     pub cancelled: u64,
 }
 
-impl EventSink for CountingEventSink {
-    fn push(&mut self, event: Event) {
+impl BookEventSink for CountingEventSink {
+    fn push(&mut self, event: BookEvent) {
         match event.kind {
-            EventKind::Accepted { .. } => self.accepted += 1,
-            EventKind::Rejected { .. } => self.rejected += 1,
-            EventKind::Fill { .. } => self.fill += 1,
-            EventKind::Filled { .. } => self.filled += 1,
-            EventKind::Cancelled { .. } => self.cancelled += 1,
+            BookEventKind::Accepted { .. } => self.accepted += 1,
+            BookEventKind::Rejected { .. } => self.rejected += 1,
+            BookEventKind::Fill { .. } => self.fill += 1,
+            BookEventKind::Filled { .. } => self.filled += 1,
+            BookEventKind::Cancelled { .. } => self.cancelled += 1,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Event {
+pub struct BookEvent {
     pub sequence: u64,
-    pub kind: EventKind,
+    pub kind: BookEventKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EventKind {
+pub enum BookEventKind {
     Accepted {
         order_id: OrderId,
     },
@@ -65,13 +65,13 @@ pub enum EventKind {
     },
 }
 
-impl EventKind {
+impl BookEventKind {
     pub fn rejected(order_id: OrderId, reason: RejectReason) -> Self {
-        EventKind::Rejected { order_id, reason }
+        BookEventKind::Rejected { order_id, reason }
     }
 
     pub fn cancelled(order_id: OrderId, remaining_qty: Qty) -> Self {
-        EventKind::Cancelled {
+        BookEventKind::Cancelled {
             order_id,
             remaining_qty,
         }
