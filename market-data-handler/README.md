@@ -55,10 +55,26 @@ the kernel TX path is excluded from the measurement. Strategy is intentionally t
 # Apply OS tuning, run the tick-to-trade bench, revert
 sudo ./run-benchmarks-linux.sh
 
-ITCH-style binary market data feed handler: **ingest** and **decode** raw network payloads into structured events.
+# Or run directly (without tuning)
+cargo bench --bench tick_to_trade -p market-data-handler
+```
 
-## Goals
+The benchmark:
 
-- **Ingest** — Accept raw datagrams (e.g. UDP multicast payloads or MoldUDP-style framing) and buffer/reassemble for decoding. Minimal copies on the hot path.
+1. Pre-encodes 50,000 synthetic ITCH `AddOrder` messages as MoldUDP64-lite UDP packets
+   (no alloc in the hot loop).
+2. Sender thread (pinned to core A) sends all packets to a loopback socket.
+3. Pipeline (pinned to core B) receives via `recvmmsg`, processes inline, records T0→T1
+   into an HDR histogram.
+4. Reports percentile table via `bench-tool` in the same format as the other crates.
 
-- **Decode** — Parse ITCH-style length-prefixed binary messages into a typed event enum. Zero-copy where possible; validated bounds and no panics on malformed input.
+### Sample results (untuned, Ryzen 7 7800X3D, powersave governor)
+
+| min | p50 | p90 | p99 | p99.9 | max |
+|---|---|---|---|---|---|
+| 70 ns | 3.5 μs | 6.2 μs | 12.0 μs | 52.6 μs | 87.4 μs |
+
+> Numbers above are from an untuned run (powersave CPU governor, no isolated cores, no
+> hugepages). With `isolcpus`, performance governor, and disabled turbo boost the p50 and
+> p99 drop significantly. See [Benchmark Methodology](../Benchmark-Methodology.md) and
+> `run-benchmarks-linux.sh` for the full tuning procedure.
