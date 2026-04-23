@@ -6,7 +6,7 @@ members = [
     "matching-pipeline",
     "limit-order-book",
     "lockfree-queue",
-    "market-data-feed",
+    "market-data-handler",
 ]
 
 [workspace.package]
