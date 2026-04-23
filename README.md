@@ -22,7 +22,9 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 
 ### [market-data-handler](market-data-handler/README.md)
 
-- ITCH-style binary market data feed parser.
+- Full UDP market data feed handler with strategy stub.
+- Measures **tick-to-trade latency**.
+- Single-thread hot path: no cross-thread queue for book updates; inline strategy decision; zero heap allocation on the hot path.
 
 ## Benchmarks
 

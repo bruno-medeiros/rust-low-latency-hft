@@ -1,0 +1,118 @@
+//! Tick-to-trade latency recording and reporting.
+//!
+//! Uses `quanta::Clock` (TSC-backed on x86 Linux) for nanosecond-precision timestamps.
+//! Samples are accumulated in an HDR histogram for accurate high-percentile reporting.
+
+use hdrhistogram::Histogram;
+use quanta::Clock;
+
+/// Raw TSC snapshot, obtained from [`LatencyRecorder::now`].
+pub type RawTs = u64;
+
+/// Records per-event tick-to-trade latency samples and reports percentiles.
+pub struct LatencyRecorder {
+    clock: Clock,
+    pub(crate) hist: Histogram<u64>,
+}
+
+impl LatencyRecorder {
+    /// Construct with a HDR histogram covering 1 ns – 10 ms, 3 significant figures.
+    pub fn new() -> Self {
+        Self {
+            clock: Clock::new(),
+            hist: Histogram::new_with_bounds(1, 10_000_000, 3)
+                .expect("valid histogram bounds"),
+        }
+    }
+
+    /// Take a raw TSC timestamp. Call immediately after `recvmmsg` returns (T0)
+    /// and immediately before writing the outbound buffer (T1).
+    #[inline(always)]
+    pub fn now(&self) -> RawTs {
+        self.clock.raw()
+    }
+
+    /// Convert a (t0, t1) raw pair to nanoseconds and record in the histogram.
+    ///
+    /// Values that overflow the histogram ceiling are saturated to the max bucket.
+    #[inline]
+    pub fn record(&mut self, t0: RawTs, t1: RawTs) {
+        let nanos = self.clock.delta_as_nanos(t0, t1);
+        // Saturate to max to avoid panics from sporadic OS preemptions.
+        let clamped = nanos.min(self.hist.high());
+        let _ = self.hist.record(clamped);
+    }
+
+    pub fn sample_count(&self) -> u64 {
+        self.hist.len()
+    }
+
+    pub fn min_ns(&self) -> u64 {
+        self.hist.min()
+    }
+
+    pub fn p50_ns(&self) -> u64 {
+        self.hist.value_at_percentile(50.0)
+    }
+
+    pub fn p90_ns(&self) -> u64 {
+        self.hist.value_at_percentile(90.0)
+    }
+
+    pub fn p95_ns(&self) -> u64 {
+        self.hist.value_at_percentile(95.0)
+    }
+
+    pub fn p99_ns(&self) -> u64 {
+        self.hist.value_at_percentile(99.0)
+    }
+
+    pub fn p999_ns(&self) -> u64 {
+        self.hist.value_at_percentile(99.9)
+    }
+
+    pub fn max_ns(&self) -> u64 {
+        self.hist.max()
+    }
+
+    pub fn mean_ns(&self) -> f64 {
+        self.hist.mean()
+    }
+
+    pub fn stdev_ns(&self) -> f64 {
+        self.hist.stdev()
+    }
+}
+
+impl Default for LatencyRecorder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn records_and_reports() {
+        let mut rec = LatencyRecorder::new();
+        let t0 = rec.now();
+        std::hint::black_box(0u64.wrapping_add(1)); // trivial work
+        let t1 = rec.now();
+        rec.record(t0, t1);
+        assert_eq!(rec.sample_count(), 1);
+        assert!(rec.max_ns() > 0);
+    }
+
+    #[test]
+    fn clamps_extreme_values() {
+        let mut rec = LatencyRecorder::new();
+        // Record a value at the histogram ceiling (10 ms); must not panic.
+        // HDR histogram rounds to bucket boundaries, so max may be slightly above high().
+        let ceiling = rec.hist.high();
+        let _ = rec.hist.record(ceiling);
+        assert!(rec.max_ns() >= ceiling);
+        assert_eq!(rec.sample_count(), 1);
+    }
+}

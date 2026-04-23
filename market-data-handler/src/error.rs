@@ -23,3 +23,9 @@ impl DecodeError {
         Self::Truncated { needed, have }
     }
 }
+
+#[derive(Debug, Error)]
+pub enum SeqOrderError {
+    #[error("packet sequence out of order: expected {expected}, got {got}")]
+    OutOfOrder { expected: u64, got: u64 },
+}

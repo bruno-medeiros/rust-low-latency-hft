@@ -1,0 +1,20 @@
+[package]
+name = "market-data-handler"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+limit-order-book = { workspace = true }
+libc = { workspace = true }
+core_affinity = { workspace = true }
+quanta = { workspace = true }
+hdrhistogram = { workspace = true }
+
+[dev-dependencies]
+bench-tool = { workspace = true }
+
+[[bench]]
+name = "tick_to_trade"
+harness = false

@@ -22,7 +22,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 matching-pipeline = { path = "matching-pipeline" }
 limit-order-book = { path = "limit-order-book" }
 lockfree-queue = { path = "lockfree-queue" }
-market-data-feed = { path = "market-data-feed" }
+market-data-handler = { path = "market-data-handler" }
 core_affinity = "0.8"
 libc = "0.2"
 clap = { version = "4", features = ["derive"] }

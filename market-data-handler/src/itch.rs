@@ -4,7 +4,29 @@
 //! Numeric fields are little-endian.
 
 use crate::error::DecodeError;
-use crate::message::{ItchMessage, Side};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Buy,
+    Sell,
+}
+
+/// ITCH-style decoded message (borrows from input buffer).
+#[derive(Debug, PartialEq)]
+pub enum ItchMessage<'a> {
+    SystemEvent { text: &'a str },
+    AddOrder {
+        oid: u64,
+        side: Side,
+        qty: u32,
+        price: u32,
+        symbol: &'a str,
+    },
+    OrderExecuted { oid: u64, qty: u32 },
+    OrderCanceled { oid: u64, qty: u32 },
+    // TODO: review what this itch message will be needed for.
+    Trade { oid: u64, side: Side, qty: u32, price: u32 },
+}
 
 const MSG_SYSTEM_EVENT: u8 = 0;
 const MSG_ADD_ORDER: u8 = 1;
@@ -135,7 +157,7 @@ fn decode_trade(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
 
 /// Encode ITCH-style messages for testing and replay.
 pub mod encode {
-    use crate::message::Side;
+    use crate::itch::Side;
 
     const MSG_SYSTEM_EVENT: u8 = 0;
     const MSG_ADD_ORDER: u8 = 1;
@@ -184,7 +206,6 @@ pub mod encode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::Side;
 
     #[test]
     fn decoder_roundtrip_system_event() {

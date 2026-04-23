@@ -1,8 +1,9 @@
-use crate::message::{ItchMessage, Side as FeedSide};
 use limit_order_book::event::BookEventSink;
 use limit_order_book::types::{OrderId, Side as BookSide};
 use limit_order_book::LimitOrderBook;
 use thiserror::Error;
+use crate::itch;
+use crate::itch::ItchMessage;
 
 /// Outcome of attempting to apply one feed message to a limit-order-book.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,9 +27,9 @@ pub enum FeedBookError {
 
 /// Adapter that converts feed events into existing book commands.
 #[derive(Debug, Default)]
-pub struct FeedBookAdapter;
+pub struct ItchToBookAdapter;
 
-impl FeedBookAdapter {
+impl ItchToBookAdapter {
     pub fn new() -> Self {
         Self
     }
@@ -89,24 +90,24 @@ impl FeedBookAdapter {
     }
 }
 
-fn map_side(side: FeedSide) -> BookSide {
+fn map_side(side: itch::Side) -> BookSide {
     match side {
-        FeedSide::Buy => BookSide::Buy,
-        FeedSide::Sell => BookSide::Sell,
+        itch::Side::Buy => BookSide::Buy,
+        itch::Side::Sell => BookSide::Sell,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{ItchMessage, Side as FeedSide};
+    use crate::itch::{ItchMessage, Side as FeedSide};
     use limit_order_book::CountingEventSink;
     use limit_order_book::LimitOrderBookV1;
 
     #[test]
     fn applies_add_and_full_cancel_messages_to_book() {
         let mut book = LimitOrderBookV1::new((90, 110), 32);
-        let mut adapter = FeedBookAdapter::new();
+        let mut adapter = ItchToBookAdapter::new();
         let mut events = CountingEventSink::default();
 
         let add = ItchMessage::AddOrder {
@@ -135,7 +136,7 @@ mod tests {
     #[test]
     fn applies_partial_cancel_and_order_executed_via_reduce_order() {
         let mut book = LimitOrderBookV1::new((90, 110), 32);
-        let mut adapter = FeedBookAdapter::new();
+        let mut adapter = ItchToBookAdapter::new();
         let mut events = CountingEventSink::default();
 
         let add = ItchMessage::AddOrder {
