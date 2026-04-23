@@ -8,7 +8,7 @@
 //! | [`message`] | ITCH message types |
 //! | [`ingest`] | In-memory datagram reassembly (no sockets) |
 //! | [`feed_book`] | Adapter: ITCH message → limit-order-book commands |
-//! | [`frame`] | MoldUDP64-lite packet framing (encode + zero-copy decode) |
+//! | [`mold_udp64`] | MoldUDP64-lite packet framing (encode + zero-copy decode) |
 //! | [`reorder`] | Sequence-numbered reorder ring with gap detection |
 //! | [`rx`] | Batched UDP receiver via `recvmmsg(2)` |
 //! | [`outbound`] | Fixed-size outbound order buffer (stack-allocated) |
@@ -19,7 +19,7 @@
 pub mod decode;
 pub mod error;
 pub mod feed_book;
-pub mod frame;
+pub mod mold_udp64;
 pub mod ingest;
 pub mod latency;
 pub mod message;
@@ -32,7 +32,10 @@ pub mod strategy;
 pub use decode::ItchDecoder;
 pub use error::{DecodeError, IngestError};
 pub use feed_book::{FeedBookAction, FeedBookAdapter, FeedBookError};
-pub use frame::{decode_packet, encode_packet};
+pub use mold_udp64::{
+    DecodedPacket, PacketHeader, PacketKind, decode_packet,
+    encode_packet,
+};
 pub use ingest::DatagramIngestor;
 pub use latency::LatencyRecorder;
 pub use message::{ItchMessage, Side};
