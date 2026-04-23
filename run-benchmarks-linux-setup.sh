@@ -62,6 +62,14 @@ done
 echo "  Disabling ASLR..."
 echo 0 | tee /proc/sys/kernel/randomize_va_space > /dev/null
 
+# Allow unprivileged `perf record` (used by `cargo flamegraph` in run-benchmarks-and-report.sh).
+# Many distros default to 4; samples need a lower value or running flamegraph with --root.
+# To persist: echo "kernel.perf_event_paranoid=0" > /etc/sysctl.d/99-perf-benchmark.conf
+if [[ -w /proc/sys/kernel/perf_event_paranoid ]]; then
+    echo "  Allowing unprivileged perf (kernel.perf_event_paranoid=0)..."
+    echo 0 | tee /proc/sys/kernel/perf_event_paranoid > /dev/null
+fi
+
 echo "  Disabling swap..."
 swapoff -a 2>/dev/null || true
 
