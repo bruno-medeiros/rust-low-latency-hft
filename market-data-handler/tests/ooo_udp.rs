@@ -7,12 +7,10 @@ use std::thread;
 use std::time::Duration;
 
 use limit_order_book::LimitOrderBookV1;
-use market_data_handler::itch::encode;
 use market_data_handler::itch::Side;
+use market_data_handler::itch::encode;
 use market_data_handler::mold_udp64::{SESSION_LEN, encode_packet};
-use market_data_handler::{
-    MarketHandlerPipeline, PipelineConfig, PipelineError, PipelineResult,
-};
+use market_data_handler::{MarketHandlerPipeline, PipelineConfig, PipelineError, PipelineResult};
 
 const N: usize = 50;
 const SESSION: &[u8; SESSION_LEN] = b"OOOTEST   ";
@@ -27,9 +25,30 @@ fn make_packets() -> Vec<Vec<u8>> {
         .collect()
 }
 
-fn run_with_order(order: Vec<usize>, reorder_window: usize) -> Result<PipelineResult, PipelineError> {
-    let packets = make_packets();
+fn make_multi_message_packets() -> Vec<Vec<u8>> {
+    let first = encode::encode_add_order(1, Side::Buy, 1, 100, "SYM");
+    let second = encode::encode_add_order(2, Side::Buy, 1, 100, "SYM");
+    let third = encode::encode_add_order(3, Side::Buy, 1, 100, "SYM");
 
+    vec![
+        encode_packet(SESSION, 0, &[&first, &second]),
+        encode_packet(SESSION, 2, &[&third]),
+    ]
+}
+
+fn run_with_order(
+    order: Vec<usize>,
+    reorder_window: usize,
+) -> Result<PipelineResult, PipelineError> {
+    let packets = make_packets();
+    run_packets_with_order(packets, order, reorder_window)
+}
+
+fn run_packets_with_order(
+    packets: Vec<Vec<u8>>,
+    order: Vec<usize>,
+    reorder_window: usize,
+) -> Result<PipelineResult, PipelineError> {
     let rx = UdpSocket::bind("127.0.0.1:0").unwrap();
     let addr = rx.local_addr().unwrap();
     let tx = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -47,7 +66,7 @@ fn run_with_order(order: Vec<usize>, reorder_window: usize) -> Result<PipelineRe
 
     let config = PipelineConfig {
         price_range: (1, 1000),
-        order_capacity: N as u64,
+        order_capacity: 64,
         core_pinning_enabled: false,
         pin_core: 0,
         first_seq: 0,
@@ -89,4 +108,14 @@ fn reorder_window_zero_reverse_fails_window_exceeded() {
     };
 
     assert!(matches!(err, PipelineError::ReorderWindowExceeded(_)));
+}
+
+#[test]
+fn pipeline_accepts_mold_packets_with_multiple_messages() {
+    let packets = make_multi_message_packets();
+    let result =
+        run_packets_with_order(packets, vec![0, 1], 8).expect("multi-message feed completes");
+
+    assert_eq!(result.packets_received, 2);
+    assert_eq!(result.messages_decoded, 3);
 }
