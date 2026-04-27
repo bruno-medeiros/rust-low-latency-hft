@@ -17,9 +17,9 @@ use crate::itch::ItchDecoder;
 use crate::error::SeqOrderError;
 use crate::itch_to_book::ItchToBookAdapter;
 use crate::mold_udp64;
-use crate::latency::LatencyRecorder;
+use crate::util::latency::LatencyRecorder;
 use crate::outbound::OutboundBuf;
-use crate::rx::UdpReceiver;
+use crate::udp_receiver::UdpReceiver;
 use crate::strategy::QuoterState;
 
 /// Configuration for the market data handler pipeline.

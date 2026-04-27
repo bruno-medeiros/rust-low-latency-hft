@@ -4,10 +4,10 @@ pub mod itch;
 pub mod error;
 pub mod itch_to_book;
 pub mod mold_udp64;
-pub mod latency;
+pub mod util;
 pub mod outbound;
 pub mod pipeline;
-pub mod rx;
+pub mod udp_receiver;
 pub mod strategy;
 
 pub use itch::ItchDecoder;
@@ -17,8 +17,8 @@ pub use mold_udp64::{
     DecodedPacket, PacketHeader, PacketKind, decode_packet,
     encode_packet,
 };
-pub use latency::LatencyRecorder;
+pub use util::latency::LatencyRecorder;
 pub use outbound::OutboundBuf;
 pub use pipeline::{MarketHandlerPipeline, PipelineConfig, PipelineResult};
-pub use rx::UdpReceiver;
+pub use udp_receiver::UdpReceiver;
 pub use strategy::QuoterState;
