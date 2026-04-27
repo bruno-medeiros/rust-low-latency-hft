@@ -26,6 +26,15 @@
 //! The decoder yields zero-copy slices into the caller's receive buffer.
 //! The encoder allocates; it is intended for the replay sender, not the hot path.
 
+use thiserror::Error;
+
+/// Failure to decode MoldUDP64 wire bytes (e.g. truncated header).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum MoldDecodeError {
+    #[error("MoldUDP64 header truncated: need {needed} bytes, have {have}")]
+    HeaderTruncated { needed: usize, have: usize },
+}
+
 /// Size of the session identifier in bytes.
 pub const SESSION_LEN: usize = 10;
 
@@ -73,16 +82,17 @@ pub struct DecodedPacket<'a> {
     pub kind: PacketKind<'a>,
 }
 
-/// Parse only the 20-byte packet header. Returns `None` if `buf` is shorter than
-/// [`HEADER_LEN`].
-#[inline]
-pub fn parse_header(buf: &[u8]) -> Option<PacketHeader> {
+/// Parse only the 20-byte packet header.
+pub fn parse_header(buf: &[u8]) -> Result<PacketHeader, MoldDecodeError> {
     if buf.len() < HEADER_LEN {
-        return None;
+        return Err(MoldDecodeError::HeaderTruncated {
+            needed: HEADER_LEN,
+            have: buf.len(),
+        });
     }
     let mut session = [0u8; SESSION_LEN];
     session.copy_from_slice(&buf[0..SESSION_LEN]);
-    Some(PacketHeader {
+    Ok(PacketHeader {
         session,
         seq: u64::from_be_bytes(buf[SESSION_LEN..SESSION_LEN + 8].try_into().unwrap()),
         msg_count: u16::from_be_bytes(buf[SESSION_LEN + 8..HEADER_LEN].try_into().unwrap()),
@@ -91,19 +101,18 @@ pub fn parse_header(buf: &[u8]) -> Option<PacketHeader> {
 
 /// Decode a full packet buffer into a [`DecodedPacket`].
 ///
-/// Returns `None` only if the header is truncated. Heartbeat and end-of-session
+/// Returns [`Err`] if the header is truncated. Heartbeat and end-of-session
 /// packets are returned as [`PacketKind::Heartbeat`] / [`PacketKind::EndOfSession`]
 /// with no message iterator. Malformed message bodies are handled gracefully by
 /// [`MsgIter`] stopping early.
-#[inline]
-pub fn decode_packet(buf: &[u8]) -> Option<DecodedPacket<'_>> {
+pub fn decode_packet(buf: &[u8]) -> Result<DecodedPacket<'_>, MoldDecodeError> {
     let header = parse_header(buf)?;
     let kind = match header.msg_count {
         HEARTBEAT_MSG_COUNT => PacketKind::Heartbeat,
         END_OF_SESSION_MSG_COUNT => PacketKind::EndOfSession,
         count => PacketKind::Messages(MsgIter::new(&buf[HEADER_LEN..], count)),
     };
-    Some(DecodedPacket { header, kind })
+    Ok(DecodedPacket { header, kind })
 }
 
 /// Encode a normal data packet containing one or more ITCH messages.
@@ -215,8 +224,14 @@ mod tests {
     }
 
     #[test]
-    fn truncated_header_returns_none() {
-        assert!(decode_packet(&[0u8; 19]).is_none());
+    fn truncated_header_returns_error() {
+        assert!(matches!(
+            decode_packet(&[0u8; 19]),
+            Err(MoldDecodeError::HeaderTruncated {
+                needed: HEADER_LEN,
+                have: 19
+            })
+        ));
     }
 
     #[test]

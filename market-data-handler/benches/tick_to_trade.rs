@@ -77,6 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         core_pinning_enabled: pin_enabled,
         pin_core: pipeline_core,
         first_seq: 0,
+        reorder_window: 256,
         // 5 ms timeout so `done` is checked promptly after sender finishes.
         read_timeout_ms: Some(5),
     };
@@ -102,9 +103,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── Pipeline (runs on this thread) ───────────────────────────────────────────────
     let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
-    let result = MarketHandlerPipeline::new(config)
+    let result = MarketHandlerPipeline::from_config(config)
         .run(rx_sock, done, book)
-        .expect("pipeline sequential seq");
+        .expect("pipeline run");
 
     sender.join().expect("sender thread panicked");
 
@@ -150,6 +151,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     section.add_param("messages_decoded", result.messages_decoded.to_string());
     section.add_param("orders_emitted", result.orders_emitted.to_string());
     section.add_param("book_events_accepted", result.book_events.accepted.to_string());
+    section.add_param(
+        "reorder_ahead_arrivals",
+        result.reorder_stats.reorder_ahead_arrivals.to_string(),
+    );
+    section.add_param(
+        "packets_late_duplicate",
+        result.reorder_stats.packets_late_duplicate.to_string(),
+    );
+    section.add_param(
+        "packets_duplicate_seq",
+        result.reorder_stats.packets_duplicate_seq.to_string(),
+    );
     let pin_note = runner.pin_to_isolated_core(pipeline_core);
     let sender_pin_note = runner.pin_to_isolated_core(sender_core);
     section.add_param("pipeline_pin_core", pin_note);
