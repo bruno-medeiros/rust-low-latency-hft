@@ -22,11 +22,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
-use bench_tool::{
-    AllocStats, BenchReport, BenchReportSection, BenchRunner, CliArgs, LatencyScenario, LatencyStats,
-    INSTRUMENTED_SYSTEM, alloc_stats_from_usage, core_pinning_disabled_by_env,
-};
 use bench_tool::stats_alloc::Region;
+use bench_tool::{
+    AllocStats, BenchReport, BenchReportSection, BenchRunner, CliArgs, INSTRUMENTED_SYSTEM,
+    LatencyScenario, LatencyStats, alloc_stats_from_usage, core_pinning_disabled_by_env,
+};
 use limit_order_book::LimitOrderBookV1;
 use market_data_handler::{
     LatencyRecorder, MarketHandlerPipeline, PipelineConfig, PipelineResult,
@@ -131,30 +131,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     add_tick_to_trade_global_report_params(&mut report, &runner, pipeline_core, sender_core);
 
     let mut section = BenchReportSection::new("Tick-to-trade pipeline (in-order)");
-    let (result_in_order, allocs_in_order) =
-        run_scenario(SendPattern::InOrder, pipeline_core)?;
-    section.latency_scenarios.push(LatencyScenario {
-        name: "In-order packets".into(),
-        samples: result_in_order.latency.sample_count(),
-        latency: latency_stats(&result_in_order.latency),
-        allocations: allocs_in_order,
-    });
-    add_shared_tick_to_trade_params(&mut section, &result_in_order);
+    run_scenario(
+        SendPattern::InOrder,
+        pipeline_core,
+        "In-order packets",
+        &mut section,
+    )?;
     runner.push_section(section, &mut report);
 
     let mut section = BenchReportSection::new("Tick-to-trade pipeline (out of order inbound)");
 
-    let (result_ooo, allocs_ooo) = run_scenario(
+    run_scenario(
         SendPattern::ReorderedSegments,
         pipeline_core,
+        "Out-of-order inbound",
+        &mut section,
     )?;
-    section.latency_scenarios.push(LatencyScenario {
-        name: "Reordered segments".into(),
-        samples: result_ooo.latency.sample_count(),
-        latency: latency_stats(&result_ooo.latency),
-        allocations: allocs_ooo,
-    });
-    add_shared_tick_to_trade_params(&mut section, &result_ooo);
     runner.push_section(section, &mut report);
 
     args.execute(&report)
@@ -169,6 +161,8 @@ enum SendPattern {
 fn run_scenario(
     pattern: SendPattern,
     pipeline_core: u32,
+    scenario_name: &str,
+    section: &mut BenchReportSection,
 ) -> Result<(PipelineResult, AllocStats), Box<dyn std::error::Error>> {
     let rx_sock = UdpSocket::bind("127.0.0.1:0")?;
     let rx_addr = rx_sock.local_addr()?;
@@ -178,26 +172,31 @@ fn run_scenario(
     let done = Arc::new(AtomicBool::new(false));
     let done_flag = done.clone();
 
-    // Same global `StatsAlloc` as `bench-tool` / LOB benches; region spans pipeline + sender work.
-    let region = Region::new(&INSTRUMENTED_SYSTEM);
-
-    let pipeline_handle = thread::spawn(move || {
-        let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
-        MarketHandlerPipeline::from_config(config).run(rx_sock, done, book)
-    });
+    let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
+    let pipeline = MarketHandlerPipeline::from_config(config);
 
     let packets = build_synthetic_packets();
 
-    run_pipeline_input_sender(packets, pattern, rx_addr, tx_sock, done_flag)
-        .expect("sender join");
+    let region = Region::new(&INSTRUMENTED_SYSTEM);
+    let pipeline_handle = thread::spawn(move || {
+        pipeline.run(rx_sock, done, book)
+    });
 
-    let result = pipeline_handle
-        .join()
-        .expect("pipeline join")?;
+    run_pipeline_input_sender(packets, pattern, rx_addr, tx_sock, done_flag).expect("sender join");
+
+    let result = pipeline_handle.join().expect("pipeline join")?;
 
     let usage = region.change();
     let samples = result.latency.sample_count();
     let alloc_stats = alloc_stats_from_usage(usage, samples);
+
+    section.latency_scenarios.push(LatencyScenario {
+        name: scenario_name.into(),
+        samples: result.latency.sample_count(),
+        latency: latency_stats(&result.latency),
+        allocations: alloc_stats.clone(),
+    });
+    add_shared_tick_to_trade_params(section, &result);
 
     Ok((result, alloc_stats))
 }
