@@ -134,7 +134,7 @@ impl MarketHandlerPipeline {
                     if e.kind() == std::io::ErrorKind::WouldBlock
                         || e.kind() == std::io::ErrorKind::TimedOut =>
                 {
-                    continue
+                    continue;
                 }
                 Err(_) => break,
             };
@@ -146,14 +146,25 @@ impl MarketHandlerPipeline {
                     Err(_) => continue,
                 };
                 let seq = packet.header.seq;
+                let seq_span = packet.header.msg_count;
                 let t0 = self.latency.now();
                 let owned = buf.as_slice().to_vec();
 
-                reorder_stats.record_push_ok(self.reorder.push(seq, owned, t0)?);
+                reorder_stats.record_push_ok(self.reorder.push_with_span(
+                    seq,
+                    mold_udp64_seq_span(seq_span),
+                    owned,
+                    t0,
+                )?);
 
                 let drained = self.reorder.drain_ready();
                 for d in drained {
-                    self.process_next_message(d, &mut book, &mut messages_decoded, &mut orders_emitted)?;
+                    self.process_next_message(
+                        d,
+                        &mut book,
+                        &mut messages_decoded,
+                        &mut orders_emitted,
+                    )?;
                 }
             }
         }
@@ -197,9 +208,7 @@ impl MarketHandlerPipeline {
         orders_emitted: &mut u64,
     ) {
         *messages_decoded += 1;
-        let _ = self
-            .itch_to_book_adapter
-            .apply(book, msg, &mut self.events);
+        let _ = self.itch_to_book_adapter.apply(book, msg, &mut self.events);
 
         let mut out = OutboundBuf::default();
         if self.quoter.on_book_update(book, &mut out) {
@@ -208,5 +217,12 @@ impl MarketHandlerPipeline {
             *orders_emitted += 1;
             std::hint::black_box(out.as_slice());
         }
+    }
+}
+
+fn mold_udp64_seq_span(msg_count: u16) -> u64 {
+    match msg_count {
+        mold_udp64::HEARTBEAT_MSG_COUNT | mold_udp64::END_OF_SESSION_MSG_COUNT => 0,
+        count => u64::from(count),
     }
 }

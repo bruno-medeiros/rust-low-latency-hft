@@ -3,8 +3,8 @@
 //! Copies each datagram into owned storage so [`crate::udp_receiver::UdpReceiver`] can reuse
 //! receive slabs. Drains strictly in ascending `seq` order for the hot path downstream.
 
-use thiserror::Error;
 use crate::util::latency::RawTs;
+use thiserror::Error;
 
 /// One datagram ready to decode after in-order drain.
 pub struct OrderedDatagram {
@@ -15,15 +15,14 @@ pub struct OrderedDatagram {
 
 struct Slot {
     seq: u64,
+    seq_span: u64,
     data: Vec<u8>,
     t0: RawTs,
 }
 
 /// Failure when `seq` is too far ahead of the watermark for this window size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-#[error(
-    "sequence {seq} is beyond reorder window (next_expected={next_expected}, window={window})"
-)]
+#[error("sequence {seq} is beyond reorder window (next_expected={next_expected}, window={window})")]
 pub struct ReorderWindowExceeded {
     pub seq: u64,
     pub next_expected: u64,
@@ -93,6 +92,19 @@ impl ReorderBuffer {
         data: Vec<u8>,
         t0: RawTs,
     ) -> Result<PushOutcome, ReorderWindowExceeded> {
+        self.push_with_span(seq, 1, data, t0)
+    }
+
+    /// Insert a datagram whose sequence number covers `seq_span` MoldUDP64 message
+    /// sequence numbers. Heartbeats use a span of zero; normal data packets use
+    /// their `msg_count`.
+    pub fn push_with_span(
+        &mut self,
+        seq: u64,
+        seq_span: u64,
+        data: Vec<u8>,
+        t0: RawTs,
+    ) -> Result<PushOutcome, ReorderWindowExceeded> {
         if seq < self.next_expected {
             return Ok(PushOutcome::LateDuplicate);
         }
@@ -115,12 +127,16 @@ impl ReorderBuffer {
             }
             unreachable!(
                 "reorder slot collision: seq {} but slot holds {}",
-                seq,
-                existing.seq
+                seq, existing.seq
             );
         }
 
-        self.slots[slots_index] = Some(Slot { seq, data, t0 });
+        self.slots[slots_index] = Some(Slot {
+            seq,
+            seq_span,
+            data,
+            t0,
+        });
         Ok(PushOutcome::Buffered { arrived_ahead })
     }
 
@@ -133,12 +149,16 @@ impl ReorderBuffer {
                 break;
             }
             let slot = self.slots[self.start].take().expect("checked is_some");
-            debug_assert_eq!(
-                slot.seq, self.next_expected,
-                "slot seq mismatch at drain"
-            );
-            self.next_expected += 1;
-            self.start = (self.start + 1) % self.window;
+            debug_assert_eq!(slot.seq, self.next_expected, "slot seq mismatch at drain");
+            let old_start = self.start;
+            self.next_expected += slot.seq_span;
+            if slot.seq_span > 0 {
+                let slots_to_clear = slot.seq_span.min(self.window as u64) as usize;
+                for offset in 1..slots_to_clear {
+                    self.slots[(old_start + offset) % self.window] = None;
+                }
+                self.start = (old_start + slots_to_clear) % self.window;
+            }
             out.push(OrderedDatagram {
                 bytes: slot.data,
                 t0: slot.t0,
@@ -161,13 +181,22 @@ mod tests {
         let mut rb = ReorderBuffer::new(1, 8);
         assert!(matches!(
             push_seq(&mut rb, 3).unwrap(),
-            PushOutcome::Buffered { arrived_ahead: true }
+            PushOutcome::Buffered {
+                arrived_ahead: true
+            }
         ));
-        assert!(push_seq(&mut rb, 1).unwrap() == PushOutcome::Buffered { arrived_ahead: false });
+        assert!(
+            push_seq(&mut rb, 1).unwrap()
+                == PushOutcome::Buffered {
+                    arrived_ahead: false
+                }
+        );
         assert_eq!(rb.drain_ready().len(), 1);
         assert!(matches!(
             push_seq(&mut rb, 2).unwrap(),
-            PushOutcome::Buffered { arrived_ahead: false }
+            PushOutcome::Buffered {
+                arrived_ahead: false
+            }
         ));
         let d = rb.drain_ready();
         assert_eq!(d.len(), 2);
@@ -179,10 +208,7 @@ mod tests {
     #[test]
     fn late_packet_dropped() {
         let mut rb = ReorderBuffer::new(10, 4);
-        assert_eq!(
-            rb.push(9, vec![1], 0).unwrap(),
-            PushOutcome::LateDuplicate
-        );
+        assert_eq!(rb.push(9, vec![1], 0).unwrap(), PushOutcome::LateDuplicate);
         assert_eq!(rb.drain_ready().len(), 0);
     }
 
@@ -190,10 +216,7 @@ mod tests {
     fn duplicate_seq_rejected() {
         let mut rb = ReorderBuffer::new(1, 8);
         push_seq(&mut rb, 2).unwrap();
-        assert_eq!(
-            push_seq(&mut rb, 2).unwrap(),
-            PushOutcome::DuplicateSeq
-        );
+        assert_eq!(push_seq(&mut rb, 2).unwrap(), PushOutcome::DuplicateSeq);
     }
 
     #[test]
@@ -221,5 +244,18 @@ mod tests {
         let d2 = rb.drain_ready();
         assert_eq!(d2.len(), 2);
         assert_eq!(rb.next_expected(), 6);
+    }
+
+    #[test]
+    fn multi_message_datagram_advances_by_message_span() {
+        let mut rb = ReorderBuffer::new(0, 8);
+        rb.push_with_span(0, 2, vec![0], 0).unwrap();
+        rb.push_with_span(2, 1, vec![2], 0).unwrap();
+
+        let d = rb.drain_ready();
+        assert_eq!(d.len(), 2);
+        assert_eq!(d[0].bytes, vec![0]);
+        assert_eq!(d[1].bytes, vec![2]);
+        assert_eq!(rb.next_expected(), 3);
     }
 }
