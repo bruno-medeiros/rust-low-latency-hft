@@ -84,29 +84,13 @@ fn latency_stats(lat: &LatencyRecorder) -> LatencyStats {
 
 fn add_shared_tick_to_trade_params(section: &mut BenchReportSection, result: &PipelineResult) {
     section.add_param("messages_sent", N_MESSAGES.to_string());
-    section.add_param(
-        "samples_recorded",
-        result.latency.sample_count().to_string(),
-    );
     section.add_param("packets_received", result.packets_received.to_string());
     section.add_param("messages_decoded", result.messages_decoded.to_string());
-    section.add_param("orders_emitted", result.orders_emitted.to_string());
-    section.add_param(
-        "book_events_accepted",
-        result.book_events.accepted.to_string(),
-    );
     section.add_param(
         "reorder_ahead_arrivals",
         result.reorder_stats.reorder_ahead_arrivals.to_string(),
     );
-    section.add_param(
-        "packets_late_duplicate",
-        result.reorder_stats.packets_late_duplicate.to_string(),
-    );
-    section.add_param(
-        "packets_duplicate_seq",
-        result.reorder_stats.packets_duplicate_seq.to_string(),
-    );
+    section.add_param("orders_emitted", result.orders_emitted.to_string());
 }
 
 fn add_tick_to_trade_global_report_params(
@@ -115,10 +99,10 @@ fn add_tick_to_trade_global_report_params(
     pipeline_core: u32,
     sender_core: u32,
 ) {
-    report
-        .metadata
-        .params
-        .insert("pipeline_pin_core".into(), runner.pin_to_isolated_core(pipeline_core));
+    report.metadata.params.insert(
+        "pipeline_pin_core".into(),
+        runner.pin_to_isolated_core(pipeline_core),
+    );
     report.metadata.params.insert(
         "bench_sender_pin_core".into(),
         runner.pin_to_isolated_core(sender_core),

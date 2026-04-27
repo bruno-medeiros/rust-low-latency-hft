@@ -24,7 +24,7 @@ pub struct BenchReport {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReportSection {
     pub title: String,
-    pub params: BTreeMap<String, String>,
+    pub params: Vec<(String, String)>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub latency_scenarios: Vec<LatencyScenario>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -35,14 +35,14 @@ impl BenchReportSection {
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
-            params: BTreeMap::new(),
+            params: Vec::new(),
             latency_scenarios: Vec::new(),
             throughput_scenarios: Vec::new(),
         }
     }
 
     pub fn add_param(&mut self, key: impl Into<String>, value: impl Into<String>) {
-        self.params.insert(key.into(), value.into());
+        self.params.push((key.into(), value.into()));
     }
 }
 
