@@ -146,7 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     add_tick_to_trade_global_report_params(&mut report, &runner, pipeline_core, sender_core);
 
     let mut section = BenchReportSection::new("Tick-to-trade pipeline (in-order)");
-    let result_in_order = run_scenario(SendPattern::InOrder, pipeline_core, sender_core)?;
+    let result_in_order = run_scenario(SendPattern::InOrder, pipeline_core)?;
     add_shared_tick_to_trade_params(&mut section, &result_in_order);
     section.latency_scenarios.push(LatencyScenario {
         name: "In-order packets".into(),
@@ -161,7 +161,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result_ooo = run_scenario(
         SendPattern::ReorderedSegments,
         pipeline_core,
-        sender_core,
     )?;
     add_shared_tick_to_trade_params(&mut section, &result_ooo);
     section.latency_scenarios.push(LatencyScenario {
@@ -184,7 +183,6 @@ enum SendPattern {
 fn run_scenario(
     pattern: SendPattern,
     pipeline_core: u32,
-    sender_core: u32,
 ) -> Result<PipelineResult, Box<dyn std::error::Error>> {
     let rx_sock = UdpSocket::bind("127.0.0.1:0")?;
     let rx_addr = rx_sock.local_addr()?;
@@ -201,7 +199,7 @@ fn run_scenario(
 
     let packets = build_synthetic_packets();
 
-    run_pipeline_input_sender(packets, pattern, sender_core, rx_addr, tx_sock, done_flag)
+    run_pipeline_input_sender(packets, pattern, rx_addr, tx_sock, done_flag)
         .expect("sender join");
 
     Ok(pipeline_handle
@@ -212,17 +210,11 @@ fn run_scenario(
 fn run_pipeline_input_sender(
     packets: Vec<Vec<u8>>,
     pattern: SendPattern,
-    sender_core: u32,
     rx_addr: SocketAddr,
     tx_sock: UdpSocket,
     done_flag: Arc<AtomicBool>,
-) -> std::thread::Result<()> {
+) -> thread::Result<()> {
     let sender_handle = thread::spawn(move || {
-        if !core_pinning_disabled_by_env() {
-            core_affinity::set_for_current(core_affinity::CoreId {
-                id: sender_core as usize,
-            });
-        }
         thread::sleep(Duration::from_millis(20));
 
         match pattern {
