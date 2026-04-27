@@ -122,7 +122,8 @@ pub struct LatencyStats {
     pub stdev_ns: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// All counters zero; used when allocation instrumentation is not in use (e.g. `allocations: 0.0` columns).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AllocStats {
     pub total_allocs: u64,
     #[serde(default)]

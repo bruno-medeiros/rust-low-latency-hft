@@ -16,38 +16,33 @@
 //! Synthetic ITCH messages: alternating AddOrder (Buy @ 100, Sell @ 200) to maintain a
 //! persistent spread that triggers the quoter on every book update.
 
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
 use bench_tool::{
-    AllocStats, BenchReportSection, CliArgs, LatencyScenario, LatencyStats,
+    AllocStats, BenchReportSection, BenchRunner, CliArgs, LatencyScenario, LatencyStats,
     core_pinning_disabled_by_env,
 };
 use limit_order_book::LimitOrderBookV1;
 use market_data_handler::{
-    MarketHandlerPipeline, PipelineConfig,
+    LatencyRecorder, MarketHandlerPipeline, PipelineConfig, PipelineResult,
     itch::{Side, encode},
     mold_udp64::{SESSION_LEN, encode_packet},
 };
 
-/// Number of ITCH messages to send. Drives sample count in the histogram.
 const N_MESSAGES: usize = 50_000;
-
-/// MoldUDP64 session identifier (10 bytes, right-padded with spaces).
 const SESSION: &[u8; SESSION_LEN] = b"BENCH     ";
-
-/// Prices chosen so best_bid + 1 < best_ask holds throughout — quoter fires every update.
 const BUY_PRICE: u32 = 100;
 const SELL_PRICE: u32 = 200;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = CliArgs::parse_args();
+/// Reorder chunk: 5 in order, then 4 ahead of the next in-sequence, then that slot.
+const REORDER_CYCLE: usize = 10;
 
-    // ── Pre-compute all UDP packets (no alloc on hot path) ───────────────────────────
-    let packets: Vec<Vec<u8>> = (0..N_MESSAGES)
+fn build_synthetic_packets() -> Vec<Vec<u8>> {
+    (0..N_MESSAGES)
         .map(|i| {
             let seq = i as u64;
             let itch = if i % 2 == 0 {
@@ -57,100 +52,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             encode_packet(SESSION, seq, &[&itch])
         })
-        .collect();
+        .collect()
+}
 
-    // ── Bind sockets ─────────────────────────────────────────────────────────────────
-    let rx_sock = UdpSocket::bind("127.0.0.1:0")?;
-    let rx_addr = rx_sock.local_addr()?;
-    let tx_sock = UdpSocket::bind("127.0.0.1:0")?;
-
-    // ── Core pinning ─────────────────────────────────────────────────────────────────
-    let pin_enabled = !core_pinning_disabled_by_env();
-    let pipeline_core = args.pin_core;
-    let sender_core = args.pin_core_b;
-
-    // ── Configuration ────────────────────────────────────────────────────────────────
-    let config = PipelineConfig {
-        // Price range covers the synthetic BUY_PRICE and SELL_PRICE.
+fn pipeline_config(pin_enabled: bool, pin_core: u32) -> PipelineConfig {
+    PipelineConfig {
         price_range: (1, 1_000),
         order_capacity: N_MESSAGES as u64,
         core_pinning_enabled: pin_enabled,
-        pin_core: pipeline_core,
+        pin_core,
         first_seq: 0,
         reorder_window: 256,
-        // 5 ms timeout so `done` is checked promptly after sender finishes.
         read_timeout_ms: Some(5),
-    };
+    }
+}
 
-    let done = Arc::new(AtomicBool::new(false));
-    let done_tx = done.clone();
-
-    // ── Sender thread ────────────────────────────────────────────────────────────────
-    let sender = thread::spawn(move || {
-        if pin_enabled {
-            core_affinity::set_for_current(core_affinity::CoreId { id: sender_core as usize });
-        }
-        // Small initial delay so the pipeline thread is ready in recvmmsg.
-        thread::sleep(Duration::from_millis(20));
-
-        for pkt in &packets {
-            tx_sock.send_to(pkt, rx_addr).expect("send_to");
-        }
-        // Give pipeline time to drain the kernel RX buffer before signalling done.
-        thread::sleep(Duration::from_millis(50));
-        done_tx.store(true, Ordering::Release);
-    });
-
-    // ── Pipeline (runs on this thread) ───────────────────────────────────────────────
-    let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
-    let result = MarketHandlerPipeline::from_config(config)
-        .run(rx_sock, done, book)
-        .expect("pipeline run");
-
-    sender.join().expect("sender thread panicked");
-
-    // ── Build bench-tool report ───────────────────────────────────────────────────────
-    let lat = &result.latency;
-    let latency_stats = LatencyStats {
-        min_ns:  lat.min_ns(),
-        p50_ns:  lat.p50_ns(),
-        p90_ns:  lat.p90_ns(),
-        p95_ns:  lat.p95_ns(),
-        p99_ns:  lat.p99_ns(),
+fn latency_stats(lat: &LatencyRecorder) -> LatencyStats {
+    LatencyStats {
+        min_ns: lat.min_ns(),
+        p50_ns: lat.p50_ns(),
+        p90_ns: lat.p90_ns(),
+        p95_ns: lat.p95_ns(),
+        p99_ns: lat.p99_ns(),
         p999_ns: lat.p999_ns(),
-        max_ns:  lat.max_ns(),
+        max_ns: lat.max_ns(),
         mean_ns: lat.mean_ns(),
         stdev_ns: lat.stdev_ns(),
-    };
+    }
+}
 
-    let zero_allocs = AllocStats {
-        total_allocs: 0,
-        total_deallocs: 0,
-        total_bytes: 0,
-        avg_allocs_per_op: 0.0,
-        avg_deallocs_per_op: 0.0,
-        avg_bytes_per_op: 0.0,
-    };
-
-    let scenario = LatencyScenario {
-        name: "Tick-to-trade".into(),
-        samples: lat.sample_count(),
-        latency: latency_stats,
-        allocations: zero_allocs,
-    };
-
-    let mut runner = bench_tool::BenchRunner::new("market-data-handler: tick-to-trade")
-        .filter(args.filter.clone());
-
-    let mut report = runner.initial_report();
-
-    let mut section = BenchReportSection::new("Tick-to-trade pipeline");
+fn add_shared_tick_to_trade_params(
+    section: &mut BenchReportSection,
+    result: &PipelineResult,
+    runner: &BenchRunner,
+    pipeline_core: u32,
+    sender_core: u32,
+) {
     section.add_param("messages_sent", N_MESSAGES.to_string());
-    section.add_param("samples_recorded", lat.sample_count().to_string());
+    section.add_param(
+        "samples_recorded",
+        result.latency.sample_count().to_string(),
+    );
     section.add_param("packets_received", result.packets_received.to_string());
     section.add_param("messages_decoded", result.messages_decoded.to_string());
     section.add_param("orders_emitted", result.orders_emitted.to_string());
-    section.add_param("book_events_accepted", result.book_events.accepted.to_string());
+    section.add_param(
+        "book_events_accepted",
+        result.book_events.accepted.to_string(),
+    );
     section.add_param(
         "reorder_ahead_arrivals",
         result.reorder_stats.reorder_ahead_arrivals.to_string(),
@@ -166,6 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pin_note = runner.pin_to_isolated_core(pipeline_core);
     let sender_pin_note = runner.pin_to_isolated_core(sender_core);
     section.add_param("pipeline_pin_core", pin_note);
+    // FIXME: rename param
     section.add_param("sender_pin_core", sender_pin_note);
     section.add_param(
         "T0_definition",
@@ -175,9 +125,138 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "T1_definition",
         "quanta::Clock::raw() before OutboundBuf write (excludes sendto syscall)",
     );
+}
 
-    section.latency_scenarios.push(scenario);
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(N_MESSAGES % REORDER_CYCLE, 0);
+    let args = CliArgs::parse_args();
+
+    let pipeline_core = args.pin_core;
+    let sender_core = args.pin_core_b;
+
+    let mut runner = bench_tool::BenchRunner::new("market-data-handler: tick-to-trade")
+        .filter(args.filter.clone());
+
+    let mut report = runner.initial_report();
+
+    let mut section = BenchReportSection::new("Tick-to-trade pipeline (in-order)");
+    let result_in_order = run_scenario(SendPattern::InOrder, pipeline_core, sender_core)?;
+    add_shared_tick_to_trade_params(
+        &mut section,
+        &result_in_order,
+        &runner,
+        pipeline_core,
+        sender_core,
+    );
+    section.latency_scenarios.push(LatencyScenario {
+        name: "In-order packets".into(),
+        samples: result_in_order.latency.sample_count(),
+        latency: latency_stats(&result_in_order.latency),
+        allocations: AllocStats::default(),
+    });
+    runner.push_section(section, &mut report);
+
+    let mut section = BenchReportSection::new("Tick-to-trade pipeline (out of order inbound)");
+
+    let result_ooo = run_scenario(
+        SendPattern::ReorderedSegments,
+        pipeline_core,
+        sender_core,
+    )?;
+    add_shared_tick_to_trade_params(
+        &mut section,
+        &result_ooo,
+        &runner,
+        pipeline_core,
+        sender_core,
+    );
+    section.latency_scenarios.push(LatencyScenario {
+        name: "Reordered segments".into(),
+        samples: result_ooo.latency.sample_count(),
+        latency: latency_stats(&result_ooo.latency),
+        allocations: AllocStats::default(),
+    });
     runner.push_section(section, &mut report);
 
     args.execute(&report)
+}
+
+#[derive(Clone, Copy)]
+enum SendPattern {
+    InOrder,
+    ReorderedSegments,
+}
+
+fn run_scenario(
+    pattern: SendPattern,
+    pipeline_core: u32,
+    sender_core: u32,
+) -> Result<PipelineResult, Box<dyn std::error::Error>> {
+    let rx_sock = UdpSocket::bind("127.0.0.1:0")?;
+    let rx_addr = rx_sock.local_addr()?;
+    let tx_sock = UdpSocket::bind("127.0.0.1:0")?;
+    let pin_enabled = !core_pinning_disabled_by_env();
+    let config = pipeline_config(pin_enabled, pipeline_core);
+    let done = Arc::new(AtomicBool::new(false));
+    let done_flag = done.clone();
+
+    let pipeline_handle = thread::spawn(move || {
+        let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
+        MarketHandlerPipeline::from_config(config).run(rx_sock, done, book)
+    });
+
+    let packets = build_synthetic_packets();
+
+    run_pipeline_input_sender(packets, pattern, sender_core, rx_addr, tx_sock, done_flag)
+        .expect("sender join");
+
+    Ok(pipeline_handle
+        .join()
+        .expect("pipeline join")?)
+}
+
+fn run_pipeline_input_sender(
+    packets: Vec<Vec<u8>>,
+    pattern: SendPattern,
+    sender_core: u32,
+    rx_addr: SocketAddr,
+    tx_sock: UdpSocket,
+    done_flag: Arc<AtomicBool>,
+) -> std::thread::Result<()> {
+    let sender_handle = thread::spawn(move || {
+        if !core_pinning_disabled_by_env() {
+            core_affinity::set_for_current(core_affinity::CoreId {
+                id: sender_core as usize,
+            });
+        }
+        thread::sleep(Duration::from_millis(20));
+
+        match pattern {
+            SendPattern::InOrder => {
+                for pkt in packets {
+                    tx_sock.send_to(&pkt, rx_addr).expect("send_to");
+                }
+            }
+            SendPattern::ReorderedSegments => {
+                for block in (0..packets.len()).step_by(REORDER_CYCLE) {
+                    for i in 0..5 {
+                        tx_sock
+                            .send_to(&packets[block + i], rx_addr)
+                            .expect("send_to");
+                    }
+                    for i in 6..REORDER_CYCLE {
+                        tx_sock
+                            .send_to(&packets[block + i], rx_addr)
+                            .expect("send_to");
+                    }
+                    tx_sock
+                        .send_to(&packets[block + 5], rx_addr)
+                        .expect("send_to");
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(50));
+        done_flag.store(true, Ordering::Release);
+    });
+    sender_handle.join()
 }
