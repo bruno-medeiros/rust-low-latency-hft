@@ -23,7 +23,7 @@ use std::thread;
 use std::time::Duration;
 
 use bench_tool::{
-    AllocStats, BenchReportSection, BenchRunner, CliArgs, LatencyScenario, LatencyStats,
+    AllocStats, BenchReport, BenchReportSection, BenchRunner, CliArgs, LatencyScenario, LatencyStats,
     core_pinning_disabled_by_env,
 };
 use limit_order_book::LimitOrderBookV1;
@@ -81,13 +81,7 @@ fn latency_stats(lat: &LatencyRecorder) -> LatencyStats {
     }
 }
 
-fn add_shared_tick_to_trade_params(
-    section: &mut BenchReportSection,
-    result: &PipelineResult,
-    runner: &BenchRunner,
-    pipeline_core: u32,
-    sender_core: u32,
-) {
+fn add_shared_tick_to_trade_params(section: &mut BenchReportSection, result: &PipelineResult) {
     section.add_param("messages_sent", N_MESSAGES.to_string());
     section.add_param(
         "samples_recorded",
@@ -112,18 +106,29 @@ fn add_shared_tick_to_trade_params(
         "packets_duplicate_seq",
         result.reorder_stats.packets_duplicate_seq.to_string(),
     );
-    let pin_note = runner.pin_to_isolated_core(pipeline_core);
-    let sender_pin_note = runner.pin_to_isolated_core(sender_core);
-    section.add_param("pipeline_pin_core", pin_note);
-    // FIXME: rename param
-    section.add_param("sender_pin_core", sender_pin_note);
-    section.add_param(
-        "T0_definition",
-        "quanta::Clock::raw() after recvmmsg() returns",
+}
+
+fn add_tick_to_trade_global_report_params(
+    report: &mut BenchReport,
+    runner: &BenchRunner,
+    pipeline_core: u32,
+    sender_core: u32,
+) {
+    report
+        .metadata
+        .params
+        .insert("pipeline_pin_core".into(), runner.pin_to_isolated_core(pipeline_core));
+    report.metadata.params.insert(
+        "bench_sender_pin_core".into(),
+        runner.pin_to_isolated_core(sender_core),
     );
-    section.add_param(
-        "T1_definition",
-        "quanta::Clock::raw() before OutboundBuf write (excludes sendto syscall)",
+    report.metadata.params.insert(
+        "T0_definition".into(),
+        "quanta::Clock::raw() after recvmmsg() returns".into(),
+    );
+    report.metadata.params.insert(
+        "T1_definition".into(),
+        "quanta::Clock::raw() before OutboundBuf write (excludes sendto syscall)".into(),
     );
 }
 
@@ -138,16 +143,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(args.filter.clone());
 
     let mut report = runner.initial_report();
+    add_tick_to_trade_global_report_params(&mut report, &runner, pipeline_core, sender_core);
 
     let mut section = BenchReportSection::new("Tick-to-trade pipeline (in-order)");
     let result_in_order = run_scenario(SendPattern::InOrder, pipeline_core, sender_core)?;
-    add_shared_tick_to_trade_params(
-        &mut section,
-        &result_in_order,
-        &runner,
-        pipeline_core,
-        sender_core,
-    );
+    add_shared_tick_to_trade_params(&mut section, &result_in_order);
     section.latency_scenarios.push(LatencyScenario {
         name: "In-order packets".into(),
         samples: result_in_order.latency.sample_count(),
@@ -163,13 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pipeline_core,
         sender_core,
     )?;
-    add_shared_tick_to_trade_params(
-        &mut section,
-        &result_ooo,
-        &runner,
-        pipeline_core,
-        sender_core,
-    );
+    add_shared_tick_to_trade_params(&mut section, &result_ooo);
     section.latency_scenarios.push(LatencyScenario {
         name: "Reordered segments".into(),
         samples: result_ooo.latency.sample_count(),
