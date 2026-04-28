@@ -1,8 +1,6 @@
 /.idea/*
 
 target/
-/demo-notes-smithy/client/
-/demo-notes-smithy/build/
 
 # Gradle
 .gradle/
