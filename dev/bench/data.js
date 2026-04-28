@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1777392101316,
+  "lastUpdate": 1777397833704,
   "repoUrl": "https://github.com/bruno-medeiros/rust-low-latency-hft",
   "entries": {
     "Rust benchmarks (throughput)": [
@@ -467,6 +467,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "Pipeline / Pipeline / Pipeline (Lobster data)",
             "value": 8752544.047504429,
+            "unit": "ops/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "bruno.do.medeiros@gmail.com",
+            "name": "Bruno Medeiros",
+            "username": "bruno-medeiros"
+          },
+          "committer": {
+            "email": "bruno.do.medeiros@gmail.com",
+            "name": "Bruno Medeiros",
+            "username": "bruno-medeiros"
+          },
+          "distinct": true,
+          "id": "efe97cc3ab11d78b9f6c58d833c02c1b71a069a8",
+          "message": "fix measurement of allocations",
+          "timestamp": "2026-04-28T18:19:42+01:00",
+          "tree_id": "816e15e91f09e63e25e31a98d9dc03258dd59081",
+          "url": "https://github.com/bruno-medeiros/rust-low-latency-hft/commit/efe97cc3ab11d78b9f6c58d833c02c1b71a069a8"
+        },
+        "date": 1777397832387,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "LOB v0 / Throughput (realistic mix) / Throughput (realistic mix)",
+            "value": 18016063.212941777,
+            "unit": "ops/s"
+          },
+          {
+            "name": "LOB v1 / Throughput (realistic mix) / Throughput (realistic mix)",
+            "value": 28669329.46459017,
+            "unit": "ops/s"
+          },
+          {
+            "name": "Pipeline / Pipeline / Pipeline (Lobster data)",
+            "value": 9849398.624663351,
             "unit": "ops/s"
           }
         ]
