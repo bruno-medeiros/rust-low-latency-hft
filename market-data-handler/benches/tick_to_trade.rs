@@ -181,21 +181,22 @@ fn run_scenario(
     let packets = build_synthetic_packets();
 
     // TODO use notify condition variable
-    let input_sender_thread = start_pipeline_input_sender(packets, pattern, rx_addr, tx_sock);
+    let input_sender_thread = start_pipeline_input_sender(packets, pattern, rx_addr, tx_sock, done_flag);
 
-    let region = Region::new(&INSTRUMENTED_SYSTEM);
     let pipeline_handle = thread::spawn(move || {
+        // Measure allocations around pipeline run
+        let region = Region::new(&INSTRUMENTED_SYSTEM);
         let (pipeline_result, pipeline) = pipeline.run(rx_sock, done, book)?;
-        Ok::<_, PipelineError>((pipeline_result, pipeline.latency))
+        let alloc_stats = region.change();
+
+        Ok::<_, PipelineError>((pipeline_result, pipeline.latency, alloc_stats))
     });
-    let alloc_stats = region.change();
 
     input_sender_thread
         .join()
         .expect("sender join");
-    done_flag.store(true, Ordering::Release);
 
-    let (pipeline_result, latency) = pipeline_handle.join().expect("pipeline join")?;
+    let (pipeline_result, latency, alloc_stats) = pipeline_handle.join().expect("pipeline join")?;
     let samples = latency.sample_count();
     let alloc_stats = alloc_stats_from_basic_stats(alloc_stats, samples);
 
@@ -215,6 +216,7 @@ fn start_pipeline_input_sender(
     pattern: SendPattern,
     rx_addr: SocketAddr,
     tx_sock: UdpSocket,
+    done_flag: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
@@ -245,6 +247,7 @@ fn start_pipeline_input_sender(
             }
         }
         // wait here to prevent allocations from being counted
-        thread::sleep(Duration::from_millis(50));
+        done_flag.store(true, Ordering::Release);
+        thread::sleep(Duration::from_millis(200));
     })
 }
