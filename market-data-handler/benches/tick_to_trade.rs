@@ -246,7 +246,10 @@ fn start_pipeline_input_sender(
                 }
             }
         }
-        // wait here to prevent allocations from being counted
+        // Give the pipeline a chance to drain packets already queued in the socket before
+        // signalling shutdown; the sender thread still owns `packets` until after the
+        // pipeline snapshots allocation stats below.
+        thread::sleep(Duration::from_millis(50));
         done_flag.store(true, Ordering::Release);
         thread::sleep(Duration::from_millis(200));
     })
