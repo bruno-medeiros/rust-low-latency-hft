@@ -61,20 +61,18 @@ pub struct PipelineResult {
     pub packets_received: u64,
     pub messages_decoded: u64,
     pub orders_emitted: u64,
-    pub book_events: CountingEventSink,
-    pub latency: LatencyRecorder,
     pub reorder_stats: ReorderStats,
 }
 
 /// Market data UDP → book → strategy pipeline, configured via [`PipelineConfig`].
 pub struct MarketHandlerPipeline {
     pub config: PipelineConfig,
-    reorder: ReorderBuffer,
-    decoder: ItchDecoder,
-    itch_to_book_adapter: ItchToBookAdapter,
-    events: CountingEventSink,
-    quoter: QuoterState,
-    latency: LatencyRecorder,
+    pub reorder: ReorderBuffer,
+    pub decoder: ItchDecoder,
+    pub itch_to_book_adapter: ItchToBookAdapter,
+    pub events: CountingEventSink,
+    pub quoter: QuoterState,
+    pub latency: LatencyRecorder,
 }
 
 impl MarketHandlerPipeline {
@@ -100,7 +98,7 @@ impl MarketHandlerPipeline {
         socket: UdpSocket,
         done: Arc<AtomicBool>,
         mut book: B,
-    ) -> Result<PipelineResult, PipelineError> {
+    ) -> Result<(PipelineResult, Self), PipelineError> {
         if self.config.core_pinning_enabled {
             core_affinity::set_for_current(CoreId {
                 id: self.config.pin_core as usize,
@@ -131,7 +129,7 @@ impl MarketHandlerPipeline {
                     if e.kind() == std::io::ErrorKind::WouldBlock
                         || e.kind() == std::io::ErrorKind::TimedOut =>
                 {
-                    continue
+                    continue;
                 }
                 Err(_) => break,
             };
@@ -148,19 +146,22 @@ impl MarketHandlerPipeline {
                 reorder_stats.record_push_ok(self.reorder.push(seq, buf.as_slice(), t0)?);
 
                 while let Some(d) = self.reorder.pop_ready() {
-                    self.process_next_message(d, &mut book, &mut messages_decoded, &mut orders_emitted)?;
+                    self.process_next_message(
+                        d,
+                        &mut book,
+                        &mut messages_decoded,
+                        &mut orders_emitted,
+                    )?;
                 }
             }
         }
 
-        Ok(PipelineResult {
+        Ok((PipelineResult {
             packets_received,
             messages_decoded,
             orders_emitted,
-            book_events: self.events,
-            latency: self.latency,
             reorder_stats,
-        })
+        }, self))
     }
 
     fn process_next_message<B: LimitOrderBook>(
@@ -192,9 +193,7 @@ impl MarketHandlerPipeline {
         orders_emitted: &mut u64,
     ) {
         *messages_decoded += 1;
-        let _ = self
-            .itch_to_book_adapter
-            .apply(book, msg, &mut self.events);
+        let _ = self.itch_to_book_adapter.apply(book, msg, &mut self.events);
 
         let mut out = OutboundBuf::default();
         if self.quoter.on_book_update(book, &mut out) {

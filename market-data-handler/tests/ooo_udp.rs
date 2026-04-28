@@ -56,7 +56,7 @@ fn run_with_order(order: Vec<usize>, reorder_window: usize) -> Result<PipelineRe
     };
 
     let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
-    MarketHandlerPipeline::from_config(config).run(rx, done, book)
+    MarketHandlerPipeline::from_config(config).run(rx, done, book).map(|(pr, _)| pr)
 }
 
 #[test]

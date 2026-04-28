@@ -29,11 +29,7 @@ use bench_tool::{
     LatencyScenario, LatencyStats, alloc_stats_from_basic_stats, core_pinning_disabled_by_env,
 };
 use limit_order_book::LimitOrderBookV1;
-use market_data_handler::{
-    LatencyRecorder, MarketHandlerPipeline, PipelineConfig, PipelineResult,
-    itch::{Side, encode},
-    mold_udp64::{SESSION_LEN, encode_packet},
-};
+use market_data_handler::{LatencyRecorder, MarketHandlerPipeline, PipelineConfig, PipelineResult, itch::{Side, encode}, mold_udp64::{SESSION_LEN, encode_packet}, PipelineError};
 
 const N_MESSAGES: usize = 50_000;
 const SESSION: &[u8; SESSION_LEN] = b"BENCH     ";
@@ -189,7 +185,8 @@ fn run_scenario(
 
     let region = Region::new(&INSTRUMENTED_SYSTEM);
     let pipeline_handle = thread::spawn(move || {
-        pipeline.run(rx_sock, done, book)
+        let (pipeline_result, pipeline) = pipeline.run(rx_sock, done, book)?;
+        Ok::<_, PipelineError>((pipeline_result, pipeline.latency))
     });
     let alloc_stats = region.change();
 
@@ -198,14 +195,14 @@ fn run_scenario(
         .expect("sender join");
     done_flag.store(true, Ordering::Release);
 
-    let pipeline_result = pipeline_handle.join().expect("pipeline join")?;
-    let samples = pipeline_result.latency.sample_count();
+    let (pipeline_result, latency) = pipeline_handle.join().expect("pipeline join")?;
+    let samples = latency.sample_count();
     let alloc_stats = alloc_stats_from_basic_stats(alloc_stats, samples);
 
     section.latency_scenarios.push(LatencyScenario {
         name: scenario_name.into(),
-        samples: pipeline_result.latency.sample_count(),
-        latency: latency_stats(&pipeline_result.latency),
+        samples: latency.sample_count(),
+        latency: latency_stats(&latency),
         allocations: alloc_stats.clone(),
     });
     add_shared_tick_to_trade_params(section, &pipeline_result, &alloc_stats);

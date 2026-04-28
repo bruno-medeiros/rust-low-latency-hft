@@ -19,7 +19,6 @@ struct NotifyGateInner {
 }
 
 impl NotifyGate {
-    
     pub fn new() -> Self {
         Self {
             inner: Arc::new(NotifyGateInner {
@@ -33,10 +32,7 @@ impl NotifyGate {
         let inner = &*self.inner;
         let mut open = inner.open.lock().expect("notify gate mutex poisoned");
         while !*open {
-            open = inner
-                .cv
-                .wait(open)
-                .expect("notify gate condvar poisoned");
+            open = inner.cv.wait(open).expect("notify gate condvar poisoned");
         }
     }
 
@@ -45,5 +41,11 @@ impl NotifyGate {
         let mut open = inner.open.lock().expect("notify gate mutex poisoned");
         *open = true;
         inner.cv.notify_all();
+    }
+}
+
+impl Default for NotifyGate {
+    fn default() -> Self {
+        Self::new()
     }
 }
