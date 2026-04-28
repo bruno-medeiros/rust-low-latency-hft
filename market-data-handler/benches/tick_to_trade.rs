@@ -20,12 +20,13 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use bench_tool::stats_alloc::Region;
 use bench_tool::{
     AllocStats, BenchReport, BenchReportSection, BenchRunner, CliArgs, INSTRUMENTED_SYSTEM,
-    LatencyScenario, LatencyStats, alloc_stats_from_usage, core_pinning_disabled_by_env,
+    LatencyScenario, LatencyStats, alloc_stats_from_basic_stats, core_pinning_disabled_by_env,
 };
 use limit_order_book::LimitOrderBookV1;
 use market_data_handler::{
@@ -169,7 +170,7 @@ fn run_scenario(
     pipeline_core: u32,
     scenario_name: &str,
     section: &mut BenchReportSection,
-) -> Result<(PipelineResult, AllocStats), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let rx_sock = UdpSocket::bind("127.0.0.1:0")?;
     let rx_addr = rx_sock.local_addr()?;
     let tx_sock = UdpSocket::bind("127.0.0.1:0")?;
@@ -183,66 +184,70 @@ fn run_scenario(
 
     let packets = build_synthetic_packets();
 
+    // TODO use notify condition variable
+    let input_sender_thread = start_pipeline_input_sender(packets, pattern, rx_addr, tx_sock);
+
     let region = Region::new(&INSTRUMENTED_SYSTEM);
     let pipeline_handle = thread::spawn(move || {
         pipeline.run(rx_sock, done, book)
     });
+    let alloc_stats = region.change();
 
-    run_pipeline_input_sender(packets, pattern, rx_addr, tx_sock, done_flag).expect("sender join");
+    input_sender_thread
+        .join()
+        .expect("sender join");
+    done_flag.store(true, Ordering::Release);
 
-    let result = pipeline_handle.join().expect("pipeline join")?;
-
-    let usage = region.change();
-    let samples = result.latency.sample_count();
-    let alloc_stats = alloc_stats_from_usage(usage, samples);
+    let pipeline_result = pipeline_handle.join().expect("pipeline join")?;
+    let samples = pipeline_result.latency.sample_count();
+    let alloc_stats = alloc_stats_from_basic_stats(alloc_stats, samples);
 
     section.latency_scenarios.push(LatencyScenario {
         name: scenario_name.into(),
-        samples: result.latency.sample_count(),
-        latency: latency_stats(&result.latency),
+        samples: pipeline_result.latency.sample_count(),
+        latency: latency_stats(&pipeline_result.latency),
         allocations: alloc_stats.clone(),
     });
-    add_shared_tick_to_trade_params(section, &result, &alloc_stats);
+    add_shared_tick_to_trade_params(section, &pipeline_result, &alloc_stats);
 
-    Ok((result, alloc_stats))
+    Ok(())
 }
 
-fn run_pipeline_input_sender(
+fn start_pipeline_input_sender(
     packets: Vec<Vec<u8>>,
     pattern: SendPattern,
     rx_addr: SocketAddr,
     tx_sock: UdpSocket,
-    done_flag: Arc<AtomicBool>,
-) -> thread::Result<()> {
-    let sender_handle = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(20));
+) -> JoinHandle<()> {
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
 
         match pattern {
             SendPattern::InOrder => {
-                for pkt in packets {
-                    tx_sock.send_to(&pkt, rx_addr).expect("send_to");
+                for pkt in packets.iter() {
+                    tx_sock.send_to(pkt.as_slice(), rx_addr).expect("send_to");
                 }
             }
             SendPattern::ReorderedSegments => {
-                for block in (0..packets.len()).step_by(REORDER_CYCLE) {
+                let n = packets.len();
+                for block in (0..n).step_by(REORDER_CYCLE) {
                     for i in 0..5 {
                         tx_sock
-                            .send_to(&packets[block + i], rx_addr)
+                            .send_to(packets[block + i].as_slice(), rx_addr)
                             .expect("send_to");
                     }
                     for i in 6..REORDER_CYCLE {
                         tx_sock
-                            .send_to(&packets[block + i], rx_addr)
+                            .send_to(packets[block + i].as_slice(), rx_addr)
                             .expect("send_to");
                     }
                     tx_sock
-                        .send_to(&packets[block + 5], rx_addr)
+                        .send_to(packets[block + 5].as_slice(), rx_addr)
                         .expect("send_to");
                 }
             }
         }
+        // wait here to prevent allocations from being counted
         thread::sleep(Duration::from_millis(50));
-        done_flag.store(true, Ordering::Release);
-    });
-    sender_handle.join()
+    })
 }

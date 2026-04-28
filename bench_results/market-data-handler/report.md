@@ -3,7 +3,7 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-04-27T16:49:26Z |
+| Timestamp | 2026-04-28T16:23:43Z |
 | CPU | AMD Ryzen 7 7800X3D 8-Core Processor |
 | Cores | 16 |
 | Memory | 30.5 GB |
@@ -26,31 +26,35 @@
 
 | Property | Value |
 |----------|-------|
-| messages_sent | 50000 |
 | packets_received | 50000 |
 | messages_decoded | 50000 |
 | reorder_ahead_arrivals | 0 |
 | orders_emitted | 49999 |
+| total_allocs | 4 |
+| total_deallocs | 0 |
+| total_bytes | 856 |
 
 ### Latency
 
 | Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| In-order packets | 40ns | 50ns | 70ns | 80ns | 1.5μs | 2.3μs | 8.3μs | 91ns | 254ns | 2.0 | 3.0 | 177B |
+| In-order packets | 90ns | 100ns | 120ns | 140ns | 1.7μs | 2.5μs | 9.2μs | 148ns | 275ns | 0.0 | 0.0 | 0B |
 
 ## Tick-to-trade pipeline (out of order inbound)
 
 | Property | Value |
 |----------|-------|
-| messages_sent | 50000 |
 | packets_received | 50000 |
 | messages_decoded | 50000 |
 | reorder_ahead_arrivals | 20000 |
 | orders_emitted | 49999 |
+| total_allocs | 4 |
+| total_deallocs | 0 |
+| total_bytes | 856 |
 
 ### Latency
 
 | Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Out-of-order inbound | 40ns | 80ns | 290ns | 1.2μs | 141.3μs | 145.7μs | 151.0μs | 2.0μs | 15.9μs | 1.7 | 2.6 | 139B |
+| Out-of-order inbound | 90ns | 120ns | 460ns | 731ns | 160.8μs | 167.2μs | 204.0μs | 2.3μs | 18.1μs | 0.0 | 0.0 | 0B |
 

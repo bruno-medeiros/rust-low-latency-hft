@@ -50,7 +50,7 @@ fn build_alloc_stats(
     }
 }
 
-pub fn alloc_stats_from_usage(stats: stats_alloc::Stats, samples: u64) -> AllocStats {
+pub fn alloc_stats_from_basic_stats(stats: stats_alloc::Stats, samples: u64) -> AllocStats {
     let total_allocs = stats.allocations as u64 + stats.reallocations as u64;
     let total_deallocs = stats.deallocations as u64;
     let total_bytes = stats.bytes_allocated as u64;

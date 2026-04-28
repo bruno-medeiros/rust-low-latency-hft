@@ -25,17 +25,7 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 - Full UDP market data feed handler with strategy stub.
 - Measures **tick-to-trade latency**.
 - Single-thread hot path: no cross-thread queue for book updates; inline strategy decision.
-- **Allocation budget:** the whole RX → decode → reorder → book → strategy pipeline is intended to run **without heap allocations** after setup (see below). The current code still allocates per datagram for the reorder buffer; closing that gap is pending.
-
-## Market data pipeline: zero-allocation hot path (design target)
-
-The **market-data-handler** demo is aimed at the same discipline as the LOB crate: once the pipeline is constructed (`from_config`), the steady-state loop should not call into the global allocator—only stack work, pre-sized buffers, and in-place updates.
-
-That implies: no `Vec` growth, `to_vec`, or `collect` on the RX batch path; reorder slots should use a **pre-allocated ring** of fixed-size buffers (copy datagram bytes into those slabs, same as production session buffers), and draining should process from those slabs without building fresh `Vec`s for each packet.
-
-**As implemented today**, reordering uses `Vec<u8>` for every stored datagram (`push` takes an owned buffer; `drain_ready` returns owned `OrderedDatagram` values), and the pipeline does `buf.as_slice().to_vec()` on ingest. The **current** handler **does not** meet this target. The tick-to-trade report’s allocation line is **not** wired to measure the pipeline’s heap behavior (it uses placeholder zero stats).
-
-Closing the gap typically means a **pre-allocated ring** of fixed `BUF_SIZE` slabs (copy into the ring, no per-push `Vec` growth), optionally an **in-order fast path** that decodes straight from `RecvBuf` when no buffering is required, or an explicit **arena** reset per batch—pick one approach before refactoring so the API and bench stay honest.
+- **Allocation budget:** after init, the RX → decode → reorder → book → strategy hot path avoids heap allocations: 
 
 ## Benchmarks
 

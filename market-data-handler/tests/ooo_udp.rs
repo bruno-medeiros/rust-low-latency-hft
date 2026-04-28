@@ -11,7 +11,7 @@ use market_data_handler::itch::encode;
 use market_data_handler::itch::Side;
 use market_data_handler::mold_udp64::{SESSION_LEN, encode_packet};
 use market_data_handler::{
-    MarketHandlerPipeline, PipelineConfig, PipelineError, PipelineResult,
+    MarketHandlerPipeline, PipelineConfig, PipelineError, PipelineResult, PushError,
 };
 
 const N: usize = 50;
@@ -88,5 +88,8 @@ fn reorder_window_zero_reverse_fails_window_exceeded() {
         Ok(_) => panic!("window 1 cannot hold reverse-ordered feed"),
     };
 
-    assert!(matches!(err, PipelineError::ReorderWindowExceeded(_)));
+    assert!(matches!(
+        err,
+        PipelineError::ReorderPush(PushError::WindowExceeded(_))
+    ));
 }

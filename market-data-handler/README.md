@@ -7,29 +7,28 @@ latency end-to-end.
 ## Pipeline
 
 ```
-recvmmsg (batched UDP RX)                    ← udp_receiver.rs
+UdpReceiver 
     │
     ▼
-MoldUDP64-lite decode                        ← mold_udp64.rs: zero-copy MsgIter
+MoldUDP64-lite decode (T0 timestamp after decode_packet)
     │
     ▼
-ReorderBuffer (bounded ring)               ← pipeline.rs + reorder.rs: copy datagram, drain by seq
-    │   • `reorder_window` in config is clamped to ≥ 1
+ReorderBuffer
     │
     ▼
-ItchDecoder                                  ← itch.rs: zero-copy, borrows from buffer
+ItchDecoder
     │
     ▼
-ItchToBookAdapter → LimitOrderBook           ← itch_to_book.rs + limit-order-book crate
+ItchToBookAdapter → LimitOrderBook
     │
     ▼
-QuoterState (strategy stub)                  ← strategy.rs: top-of-book cross-spread quoter
+QuoterState (strategy stub)
     │
     ▼
-OutboundBuf (order encode)                     ← outbound.rs: [u8; 18] stack buffer, zero alloc
+OutboundBuf (order encode)
     │
     ▼
-T1 timestamp → LatencyRecorder               ← util/latency.rs: TSC via quanta + hdrhistogram
+LatencyRecorder (record T1 timestamp) 
 ```
 
 All of the above runs **on a single pinned thread**. There is no cross-thread queue on

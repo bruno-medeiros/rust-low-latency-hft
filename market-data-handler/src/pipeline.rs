@@ -21,7 +21,7 @@ use crate::itch::{ItchDecoder, ItchMessage};
 use crate::itch_to_book::ItchToBookAdapter;
 use crate::mold_udp64;
 use crate::outbound::OutboundBuf;
-use crate::reorder::{OrderedDatagram, ReorderBuffer, ReorderStats, ReorderWindowExceeded};
+use crate::reorder::{OrderedDatagram, PushError, ReorderBuffer, ReorderStats};
 use crate::strategy::QuoterState;
 use crate::udp_receiver::UdpReceiver;
 use crate::util::latency::{LatencyRecorder, RawTs};
@@ -30,7 +30,7 @@ use crate::util::latency::{LatencyRecorder, RawTs};
 #[derive(Debug, Error)]
 pub enum PipelineError {
     #[error(transparent)]
-    ReorderWindowExceeded(#[from] ReorderWindowExceeded),
+    ReorderPush(#[from] PushError),
 
     #[error(transparent)]
     MoldDecode(#[from] mold_udp64::MoldDecodeError),
@@ -95,9 +95,6 @@ impl MarketHandlerPipeline {
     /// Run until `done` is set.
     ///
     /// `book` is owned for the duration of the run. The caller supplies a bound socket.
-    ///
-    /// Returns [`Err`] if a datagram's sequence is farther ahead than the reorder window allows,
-    /// or if a buffered datagram fails MoldUDP64 decode (e.g. truncated copy).
     pub fn run<B: LimitOrderBook>(
         mut self,
         socket: UdpSocket,
@@ -174,7 +171,7 @@ impl MarketHandlerPipeline {
         orders_emitted: &mut u64,
     ) -> Result<(), PipelineError> {
         let t0 = datagram.t0;
-        let packet = mold_udp64::decode_packet(&datagram.bytes)?;
+        let packet = mold_udp64::decode_packet(datagram.as_slice())?;
         let mold_udp64::PacketKind::Messages(msg_iter) = packet.kind else {
             return Ok(());
         };

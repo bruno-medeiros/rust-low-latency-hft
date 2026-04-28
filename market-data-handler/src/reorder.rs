@@ -1,7 +1,8 @@
 //! Bounded reorder buffer for MoldUDP64 datagrams: watermark + sliding ring.
 //!
-//! Copies each datagram into owned storage so [`crate::udp_receiver::UdpReceiver`] can reuse
-//! receive slabs. Drains strictly in ascending `seq` order for the hot path downstream.
+//! Copies each datagram into fixed [`crate::udp_receiver::BUF_SIZE`] slabs in the ring so
+//! [`crate::udp_receiver::UdpReceiver`] receive buffers can be reused immediately.
+//! Drains strictly in ascending `seq` order for the hot path downstream.
 
 use thiserror::Error;
 
@@ -198,6 +199,18 @@ impl ReorderBuffer {
 }
 
 #[cfg(test)]
+impl ReorderBuffer {
+    /// Drains all contiguous ready datagrams into a `Vec` (unit tests only; hot path uses [`pop_ready`](ReorderBuffer::pop_ready)).
+    fn drain_ready(&mut self) -> Vec<OrderedDatagram> {
+        let mut out = Vec::new();
+        while let Some(d) = self.pop_ready() {
+            out.push(d);
+        }
+        out
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -219,10 +232,7 @@ mod tests {
             push_seq(&mut rb, 2).unwrap(),
             PushOutcome::Buffered { arrived_ahead: false }
         ));
-        let mut drained = Vec::new();
-        while let Some(d) = rb.pop_ready() {
-            drained.push(d);
-        }
+        let drained = rb.drain_ready();
         assert_eq!(drained.len(), 2);
         assert_eq!(drained[0].as_slice(), &[2u8; 4]);
         assert_eq!(drained[1].as_slice(), &[3u8; 4]);
@@ -236,7 +246,7 @@ mod tests {
             rb.push(9, &[1], 0).unwrap(),
             PushOutcome::LateDuplicate
         );
-        assert!(rb.pop_ready().is_none());
+        assert!(rb.drain_ready().is_empty());
     }
 
     #[test]
@@ -269,15 +279,12 @@ mod tests {
         for s in 0u64..4 {
             push_seq(&mut rb, s).unwrap();
         }
-        let d = rb.drain_ready();
-        assert_eq!(d.len(), 4);
+        assert_eq!(rb.drain_ready().len(), 4);
         assert_eq!(rb.next_expected(), 4);
-        assert_eq!(rb.start, 0);
 
         push_seq(&mut rb, 5).unwrap();
         push_seq(&mut rb, 4).unwrap();
-        let d2 = rb.drain_ready();
-        assert_eq!(d2.len(), 2);
+        assert_eq!(rb.drain_ready().len(), 2);
         assert_eq!(rb.next_expected(), 6);
     }
 }
