@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use limit_order_book::CountingEventSink;
-use serde::{Deserialize, Serialize};
+use serde::de::{MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use chrono::Utc;
 
@@ -24,6 +25,7 @@ pub struct BenchReport {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReportSection {
     pub title: String,
+    #[serde(default, deserialize_with = "deserialize_section_params")]
     pub params: Vec<(String, String)>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub latency_scenarios: Vec<LatencyScenario>,
@@ -44,6 +46,45 @@ impl BenchReportSection {
     pub fn add_param(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.params.push((key.into(), value.into()));
     }
+}
+
+fn deserialize_section_params<'de, D>(deserializer: D) -> Result<Vec<(String, String)>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct ParamsVisitor;
+
+    impl<'de> Visitor<'de> for ParamsVisitor {
+        type Value = Vec<(String, String)>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("an ordered parameter list or a parameter map")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut params = Vec::new();
+            while let Some(param) = seq.next_element()? {
+                params.push(param);
+            }
+            Ok(params)
+        }
+
+        fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+        where
+            A: MapAccess<'de>,
+        {
+            let mut params = Vec::new();
+            while let Some(param) = map.next_entry()? {
+                params.push(param);
+            }
+            Ok(params)
+        }
+    }
+
+    deserializer.deserialize_any(ParamsVisitor)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -368,5 +409,51 @@ impl BenchReport {
 
         out.push('\n');
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BenchReportSection;
+
+    #[test]
+    fn bench_report_section_deserializes_ordered_params() {
+        let section: BenchReportSection = serde_json::from_str(
+            r#"{
+                "title": "ordered",
+                "params": [["messages_sent", "50000"], ["packets_received", "50000"]]
+            }"#,
+        )
+        .expect("ordered params should deserialize");
+
+        assert_eq!(
+            section.params,
+            vec![
+                ("messages_sent".to_string(), "50000".to_string()),
+                ("packets_received".to_string(), "50000".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn bench_report_section_deserializes_legacy_map_params() {
+        let section: BenchReportSection = serde_json::from_str(
+            r#"{
+                "title": "legacy",
+                "params": {
+                    "messages_sent": "50000",
+                    "packets_received": "50000"
+                }
+            }"#,
+        )
+        .expect("legacy map params should deserialize");
+
+        assert_eq!(
+            section.params,
+            vec![
+                ("messages_sent".to_string(), "50000".to_string()),
+                ("packets_received".to_string(), "50000".to_string()),
+            ]
+        );
     }
 }
