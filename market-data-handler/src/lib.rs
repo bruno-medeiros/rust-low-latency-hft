@@ -19,6 +19,6 @@ pub use mold_udp64::{
 pub use util::latency::LatencyRecorder;
 pub use outbound::OutboundBuf;
 pub use pipeline::{MarketHandlerPipeline, PipelineConfig, PipelineError, PipelineResult};
-pub use reorder::ReorderStats;
+pub use reorder::{PushError, ReorderStats, ReorderWindowExceeded};
 pub use udp_receiver::UdpReceiver;
 pub use strategy::QuoterState;

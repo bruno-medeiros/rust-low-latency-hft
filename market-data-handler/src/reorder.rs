@@ -4,18 +4,39 @@
 //! receive slabs. Drains strictly in ascending `seq` order for the hot path downstream.
 
 use thiserror::Error;
+
+use crate::udp_receiver::BUF_SIZE;
 use crate::util::latency::RawTs;
+
+/// Fixed storage for one datagram payload (same span as UDP receive buffers).
+pub type DatagramBytes = [u8; BUF_SIZE];
 
 /// One datagram ready to decode after in-order drain.
 pub struct OrderedDatagram {
-    pub bytes: Vec<u8>,
+    len: usize,
+    bytes: DatagramBytes,
     /// `LatencyRecorder::now()` taken when this payload was copied into the buffer (T0).
     pub t0: RawTs,
 }
 
+impl OrderedDatagram {
+    pub fn as_slice(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 struct Slot {
     seq: u64,
-    data: Vec<u8>,
+    len: usize,
+    data: DatagramBytes,
     t0: RawTs,
 }
 
@@ -28,6 +49,23 @@ pub struct ReorderWindowExceeded {
     pub seq: u64,
     pub next_expected: u64,
     pub window: usize,
+}
+
+/// Datagram payload cannot fit in a reorder slot (`len` > [`BUF_SIZE`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+#[error("payload length {len} exceeds reorder slot ({max})")]
+pub struct PayloadTooLarge {
+    pub len: usize,
+    pub max: usize,
+}
+
+/// Error returned by [`ReorderBuffer::push`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum PushError {
+    #[error(transparent)]
+    WindowExceeded(#[from] ReorderWindowExceeded),
+    #[error(transparent)]
+    PayloadTooLarge(#[from] PayloadTooLarge),
 }
 
 /// Result of [`ReorderBuffer::push`].
@@ -90,9 +128,17 @@ impl ReorderBuffer {
     pub fn push(
         &mut self,
         seq: u64,
-        data: Vec<u8>,
+        src: &[u8],
         t0: RawTs,
-    ) -> Result<PushOutcome, ReorderWindowExceeded> {
+    ) -> Result<PushOutcome, PushError> {
+        if src.len() > BUF_SIZE {
+            return Err(PayloadTooLarge {
+                len: src.len(),
+                max: BUF_SIZE,
+            }
+            .into());
+        }
+
         if seq < self.next_expected {
             return Ok(PushOutcome::LateDuplicate);
         }
@@ -103,7 +149,8 @@ impl ReorderBuffer {
                 seq,
                 next_expected: self.next_expected,
                 window: self.window,
-            });
+            }
+            .into());
         }
 
         let arrived_ahead = dist > 0;
@@ -120,31 +167,33 @@ impl ReorderBuffer {
             );
         }
 
-        self.slots[slots_index] = Some(Slot { seq, data, t0 });
+        // FIXME: optimize this
+        let mut data = [0u8; BUF_SIZE];
+        data[..src.len()].copy_from_slice(src);
+        self.slots[slots_index] = Some(Slot {
+            seq,
+            len: src.len(),
+            data,
+            t0,
+        });
         Ok(PushOutcome::Buffered { arrived_ahead })
     }
 
-    /// Remove and return all contiguous datagrams starting at `next_expected`.
-    pub fn drain_ready(&mut self) -> Vec<OrderedDatagram> {
-        let mut out = Vec::new();
-        loop {
-            // TODO: refactor this to use a match
-            if self.slots[self.start].is_none() {
-                break;
-            }
-            let slot = self.slots[self.start].take().expect("checked is_some");
-            debug_assert_eq!(
-                slot.seq, self.next_expected,
-                "slot seq mismatch at drain"
-            );
-            self.next_expected += 1;
-            self.start = (self.start + 1) % self.window;
-            out.push(OrderedDatagram {
-                bytes: slot.data,
-                t0: slot.t0,
-            });
-        }
-        out
+    /// Remove the next contiguous ready datagram if `next_expected` is present; otherwise `None`.
+    pub fn pop_ready(&mut self) -> Option<OrderedDatagram> {
+        let slot = self.slots[self.start].take()?;
+        debug_assert_eq!(
+            slot.seq, self.next_expected,
+            "slot seq mismatch at drain"
+        );
+        self.next_expected += 1;
+        self.start = (self.start + 1) % self.window;
+        Some(OrderedDatagram {
+            len: slot.len,
+            // FIXME: optimize this
+            bytes: slot.data,
+            t0: slot.t0,
+        })
     }
 }
 
@@ -152,8 +201,9 @@ impl ReorderBuffer {
 mod tests {
     use super::*;
 
-    fn push_seq(rb: &mut ReorderBuffer, seq: u64) -> Result<PushOutcome, ReorderWindowExceeded> {
-        rb.push(seq, vec![seq as u8; 4], seq)
+    fn push_seq(rb: &mut ReorderBuffer, seq: u64) -> Result<PushOutcome, PushError> {
+        let b = [seq as u8; 4];
+        rb.push(seq, &b, seq)
     }
 
     #[test]
@@ -169,10 +219,13 @@ mod tests {
             push_seq(&mut rb, 2).unwrap(),
             PushOutcome::Buffered { arrived_ahead: false }
         ));
-        let d = rb.drain_ready();
-        assert_eq!(d.len(), 2);
-        assert_eq!(d[0].bytes, vec![2u8; 4]);
-        assert_eq!(d[1].bytes, vec![3u8; 4]);
+        let mut drained = Vec::new();
+        while let Some(d) = rb.pop_ready() {
+            drained.push(d);
+        }
+        assert_eq!(drained.len(), 2);
+        assert_eq!(drained[0].as_slice(), &[2u8; 4]);
+        assert_eq!(drained[1].as_slice(), &[3u8; 4]);
         assert_eq!(rb.next_expected(), 4);
     }
 
@@ -180,10 +233,10 @@ mod tests {
     fn late_packet_dropped() {
         let mut rb = ReorderBuffer::new(10, 4);
         assert_eq!(
-            rb.push(9, vec![1], 0).unwrap(),
+            rb.push(9, &[1], 0).unwrap(),
             PushOutcome::LateDuplicate
         );
-        assert_eq!(rb.drain_ready().len(), 0);
+        assert!(rb.pop_ready().is_none());
     }
 
     #[test]
@@ -199,10 +252,15 @@ mod tests {
     #[test]
     fn window_exceeded_err() {
         let mut rb = ReorderBuffer::new(0, 4);
-        let err = rb.push(4, vec![], 0).unwrap_err();
-        assert_eq!(err.seq, 4);
-        assert_eq!(err.next_expected, 0);
-        assert_eq!(err.window, 4);
+        let err = rb.push(4, &[], 0).unwrap_err();
+        assert!(matches!(
+            err,
+            PushError::WindowExceeded(ReorderWindowExceeded {
+                seq: 4,
+                next_expected: 0,
+                window: 4
+            })
+        ));
     }
 
     #[test]

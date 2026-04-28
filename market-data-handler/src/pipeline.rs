@@ -147,12 +147,10 @@ impl MarketHandlerPipeline {
                 };
                 let seq = packet.header.seq;
                 let t0 = self.latency.now();
-                let owned = buf.as_slice().to_vec();
 
-                reorder_stats.record_push_ok(self.reorder.push(seq, owned, t0)?);
+                reorder_stats.record_push_ok(self.reorder.push(seq, buf.as_slice(), t0)?);
 
-                let drained = self.reorder.drain_ready();
-                for d in drained {
+                while let Some(d) = self.reorder.pop_ready() {
                     self.process_next_message(d, &mut book, &mut messages_decoded, &mut orders_emitted)?;
                 }
             }
