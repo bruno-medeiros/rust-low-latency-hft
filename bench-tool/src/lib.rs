@@ -7,6 +7,8 @@ mod report;
 mod runner;
 mod runtime_tuning;
 
+pub mod sync_util;
+
 pub use cli::CliArgs;
 pub use format_unit::fmt_duration;
 pub use hardware::HardwareInfo;
