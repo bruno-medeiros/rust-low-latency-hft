@@ -82,8 +82,11 @@ fn latency_stats(lat: &LatencyRecorder) -> LatencyStats {
     }
 }
 
-fn add_shared_tick_to_trade_params(section: &mut BenchReportSection, result: &PipelineResult) {
-    section.add_param("messages_sent", N_MESSAGES.to_string());
+fn add_shared_tick_to_trade_params(
+    section: &mut BenchReportSection,
+    result: &PipelineResult,
+    alloc: &AllocStats,
+) {
     section.add_param("packets_received", result.packets_received.to_string());
     section.add_param("messages_decoded", result.messages_decoded.to_string());
     section.add_param(
@@ -91,6 +94,9 @@ fn add_shared_tick_to_trade_params(section: &mut BenchReportSection, result: &Pi
         result.reorder_stats.reorder_ahead_arrivals.to_string(),
     );
     section.add_param("orders_emitted", result.orders_emitted.to_string());
+    section.add_param("total_allocs", alloc.total_allocs.to_string());
+    section.add_param("total_deallocs", alloc.total_deallocs.to_string());
+    section.add_param("total_bytes", alloc.total_bytes.to_string());
 }
 
 fn add_tick_to_trade_global_report_params(
@@ -196,7 +202,7 @@ fn run_scenario(
         latency: latency_stats(&result.latency),
         allocations: alloc_stats.clone(),
     });
-    add_shared_tick_to_trade_params(section, &result);
+    add_shared_tick_to_trade_params(section, &result, &alloc_stats);
 
     Ok((result, alloc_stats))
 }
