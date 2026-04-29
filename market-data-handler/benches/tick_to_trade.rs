@@ -178,10 +178,7 @@ fn run_scenario(
     let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
     let pipeline = MarketHandlerPipeline::from_config(config);
 
-    let packets = build_synthetic_packets();
-
-    // TODO use notify condition variable
-    let input_sender_thread = start_pipeline_input_sender(packets, pattern, rx_addr, tx_sock, done_flag);
+    let input_sender_thread = start_pipeline_input_sender(pattern, rx_addr, tx_sock, done_flag);
 
     let pipeline_handle = thread::spawn(move || {
         // Measure allocations around pipeline run
@@ -212,12 +209,13 @@ fn run_scenario(
 }
 
 fn start_pipeline_input_sender(
-    packets: Vec<Vec<u8>>,
     pattern: SendPattern,
     rx_addr: SocketAddr,
     tx_sock: UdpSocket,
     done_flag: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
+    let packets = build_synthetic_packets();
+
     thread::spawn(move || {
         thread::sleep(Duration::from_millis(50));
 
