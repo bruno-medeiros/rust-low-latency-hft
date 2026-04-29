@@ -19,7 +19,7 @@ use thiserror::Error;
 
 use crate::itch::{ItchDecoder, ItchMessage};
 use crate::itch_to_book::ItchToBookAdapter;
-use crate::mold_udp64::{self, DecodedPacket};
+use crate::mold_udp64::{self, DecodedPacket, PacketKind};
 use crate::outbound::OutboundBuf;
 use crate::reorder::{PushError, ReorderBuffer, ReorderStats};
 use crate::strategy::QuoterState;
@@ -143,10 +143,20 @@ impl MarketHandlerPipeline {
                 let seq = packet.header.seq;
 
                 if seq == self.reorder.next_expected() {
-                    self.reorder.advance_in_order();
-                    self.process_next_message(packet, t0, &mut book, &mut messages_decoded, &mut orders_emitted);
+                    let seq_span = packet_sequence_span(&packet);
+                    if seq_span > 0 {
+                        self.reorder.advance_in_order_by(seq_span);
+                    }
+                    self.process_next_message(
+                        packet,
+                        t0,
+                        &mut book,
+                        &mut messages_decoded,
+                        &mut orders_emitted,
+                    );
                 } else {
-                    self.reorder.push(seq, buf.as_slice(), t0)?;
+                    self.reorder
+                        .push(seq, buf.as_slice(), t0, packet_sequence_span(&packet))?;
                 }
 
                 while let Some(d) = self.reorder.pop_ready() {
@@ -162,12 +172,15 @@ impl MarketHandlerPipeline {
             }
         }
 
-        Ok((PipelineResult {
-            packets_received,
-            messages_decoded,
-            orders_emitted,
-            reorder_stats: self.reorder.stats(),
-        }, self))
+        Ok((
+            PipelineResult {
+                packets_received,
+                messages_decoded,
+                orders_emitted,
+                reorder_stats: self.reorder.stats(),
+            },
+            self,
+        ))
     }
 
     fn process_next_message<B: LimitOrderBook>(
@@ -206,5 +219,13 @@ impl MarketHandlerPipeline {
             *orders_emitted += 1;
             std::hint::black_box(out.as_slice());
         }
+    }
+}
+
+#[inline]
+fn packet_sequence_span(packet: &DecodedPacket<'_>) -> u64 {
+    match &packet.kind {
+        PacketKind::Messages(_) => packet.header.msg_count as u64,
+        PacketKind::Heartbeat | PacketKind::EndOfSession => 0,
     }
 }
