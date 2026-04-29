@@ -36,9 +36,9 @@
 
 ### Latency
 
-| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
-|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| In-order packets | 100ns | 110ns | 130ns | 140ns | 1.7μs | 2.1μs | 9.5μs | 158ns | 273ns | 0.0 | 0.0 | 2B |
+| Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
+|-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
+| In-order packets | 100ns | 110ns | 130ns | 1.7μs | 2.1μs | 9.5μs | 158ns | 273ns | 0.0 | 0.0 | 2B |
 
 ## Tick-to-trade pipeline (out of order inbound)
 
@@ -54,7 +54,7 @@
 
 ### Latency
 
-| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
-|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Out-of-order inbound | 100ns | 130ns | 500ns | 1.6μs | 165.9μs | 169.9μs | 171.0μs | 2.4μs | 18.6μs | 0.0 | 0.0 | 2B |
+| Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
+|-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
+| Out-of-order inbound | 100ns | 130ns | 500ns | 165.9μs | 169.9μs | 171.0μs | 2.4μs | 18.6μs | 0.0 | 0.0 | 2B |
 

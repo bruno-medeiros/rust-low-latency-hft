@@ -30,17 +30,17 @@
 
 ### Latency
 
-| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
-|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Add (passive) | 1ns | 42ns | 42ns | 83ns | 84ns | 125ns | 6.4μs | 39ns | 30ns | 1.0 | 0.0 | 32B |
-| Add (sweep 5 levels, 50 fills) | 875ns | 1.1μs | 1.2μs | 1.3μs | 1.5μs | 4.9μs | 40.5μs | 1.1μs | 337ns | 0.0 | 6.0 | 0B |
-| Market (sweep 10 levels, 100 fills) | 1.8μs | 2.2μs | 2.4μs | 2.5μs | 3.0μs | 9.4μs | 98.7μs | 2.3μs | 640ns | 0.0 | 14.0 | 0B |
-| Cancel (head of queue) | 1ns | 41ns | 42ns | 42ns | 83ns | 292ns | 18.9μs | 32ns | 65ns | 0.0 | 0.0 | 0B |
-| Cancel (tail of queue) | 100ns | 167ns | 208ns | 209ns | 227ns | 500ns | 19.4μs | 168ns | 120ns | 0.0 | 0.0 | 0B |
-| Spread (BBO query) | 1ns | 1ns | 1ns | 41ns | 42ns | 42ns | 167ns | 3ns | 9ns | 0.0 | 0.0 | 0B |
-| Depth (top 5) | 1ns | 42ns | 83ns | 83ns | 84ns | 84ns | 129.4μs | 45ns | 411ns | 1.0 | 1.0 | 80B |
-| Order lookup (hit) | 1ns | 1ns | 1ns | 42ns | 42ns | 42ns | 292ns | 4ns | 11ns | 0.0 | 0.0 | 0B |
-| Realistic mix (per-op) | 1ns | 42ns | 83ns | 84ns | 84ns | 125ns | 8.9μs | 45ns | 44ns | 0.4 | 0.0 | 13B |
+| Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
+|-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
+| Add (passive) | 1ns | 42ns | 42ns | 84ns | 125ns | 6.4μs | 39ns | 30ns | 1.0 | 0.0 | 32B |
+| Add (sweep 5 levels, 50 fills) | 875ns | 1.1μs | 1.2μs | 1.5μs | 4.9μs | 40.5μs | 1.1μs | 337ns | 0.0 | 6.0 | 0B |
+| Market (sweep 10 levels, 100 fills) | 1.8μs | 2.2μs | 2.4μs | 3.0μs | 9.4μs | 98.7μs | 2.3μs | 640ns | 0.0 | 14.0 | 0B |
+| Cancel (head of queue) | 1ns | 41ns | 42ns | 83ns | 292ns | 18.9μs | 32ns | 65ns | 0.0 | 0.0 | 0B |
+| Cancel (tail of queue) | 100ns | 167ns | 208ns | 227ns | 500ns | 19.4μs | 168ns | 120ns | 0.0 | 0.0 | 0B |
+| Spread (BBO query) | 1ns | 1ns | 1ns | 42ns | 42ns | 167ns | 3ns | 9ns | 0.0 | 0.0 | 0B |
+| Depth (top 5) | 1ns | 42ns | 83ns | 84ns | 84ns | 129.4μs | 45ns | 411ns | 1.0 | 1.0 | 80B |
+| Order lookup (hit) | 1ns | 1ns | 1ns | 42ns | 42ns | 292ns | 4ns | 11ns | 0.0 | 0.0 | 0B |
+| Realistic mix (per-op) | 1ns | 42ns | 83ns | 84ns | 125ns | 8.9μs | 45ns | 44ns | 0.4 | 0.0 | 13B |
 
 ## Throughput (realistic mix)
 

@@ -31,17 +31,17 @@
 
 ### Latency
 
-| Operation | min | p50 | p90 | p95 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
-|-----------|-----|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Add (passive) | 30ns | 50ns | 60ns | 70ns | 80ns | 170ns | 390ns | 52ns | 10ns | 0.0 | 0.0 | 0B |
-| Add (sweep 5 levels, 50 fills) | 791ns | 851ns | 891ns | 901ns | 921ns | 1.3μs | 1.8μs | 852ns | 33ns | 0.0 | 0.0 | 0B |
-| Market (sweep 10 levels, 100 fills) | 1.5μs | 1.6μs | 1.7μs | 1.7μs | 1.7μs | 2.1μs | 5.3μs | 1.6μs | 40ns | 0.0 | 0.0 | 0B |
-| Cancel (head of queue) | 30ns | 50ns | 60ns | 70ns | 70ns | 230ns | 531ns | 50ns | 11ns | 0.0 | 0.0 | 0B |
-| Cancel (tail of queue) | 20ns | 50ns | 50ns | 60ns | 70ns | 260ns | 661ns | 46ns | 12ns | 0.0 | 0.0 | 0B |
-| Spread (BBO query) | 1ns | 10ns | 10ns | 10ns | 10ns | 20ns | 200ns | 8ns | 4ns | 0.0 | 0.0 | 0B |
-| Depth (top 5) | 120ns | 160ns | 180ns | 180ns | 200ns | 751ns | 1.5μs | 165ns | 31ns | 2.0 | 1.0 | 128B |
-| Order lookup (hit) | 10ns | 10ns | 20ns | 20ns | 20ns | 50ns | 220ns | 13ns | 5ns | 0.0 | 0.0 | 0B |
-| Realistic mix (per-op) | 1ns | 70ns | 90ns | 90ns | 100ns | 300ns | 801ns | 67ns | 21ns | 0.0 | 0.0 | 0B |
+| Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
+|-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
+| Add (passive) | 30ns | 50ns | 60ns | 80ns | 170ns | 390ns | 52ns | 10ns | 0.0 | 0.0 | 0B |
+| Add (sweep 5 levels, 50 fills) | 791ns | 851ns | 891ns | 921ns | 1.3μs | 1.8μs | 852ns | 33ns | 0.0 | 0.0 | 0B |
+| Market (sweep 10 levels, 100 fills) | 1.5μs | 1.6μs | 1.7μs | 1.7μs | 2.1μs | 5.3μs | 1.6μs | 40ns | 0.0 | 0.0 | 0B |
+| Cancel (head of queue) | 30ns | 50ns | 60ns | 70ns | 230ns | 531ns | 50ns | 11ns | 0.0 | 0.0 | 0B |
+| Cancel (tail of queue) | 20ns | 50ns | 50ns | 70ns | 260ns | 661ns | 46ns | 12ns | 0.0 | 0.0 | 0B |
+| Spread (BBO query) | 1ns | 10ns | 10ns | 10ns | 20ns | 200ns | 8ns | 4ns | 0.0 | 0.0 | 0B |
+| Depth (top 5) | 120ns | 160ns | 180ns | 200ns | 751ns | 1.5μs | 165ns | 31ns | 2.0 | 1.0 | 128B |
+| Order lookup (hit) | 10ns | 10ns | 20ns | 20ns | 50ns | 220ns | 13ns | 5ns | 0.0 | 0.0 | 0B |
+| Realistic mix (per-op) | 1ns | 70ns | 90ns | 100ns | 300ns | 801ns | 67ns | 21ns | 0.0 | 0.0 | 0B |
 
 #### vs baseline
 

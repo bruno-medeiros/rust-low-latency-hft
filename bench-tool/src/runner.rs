@@ -24,7 +24,6 @@ fn histogram_to_latency_stats(hist: &Histogram<u64>) -> LatencyStats {
         min_ns: hist.min(),
         p50_ns: hist.value_at_percentile(50.0),
         p90_ns: hist.value_at_percentile(90.0),
-        p95_ns: hist.value_at_percentile(95.0),
         p99_ns: hist.value_at_percentile(99.0),
         p999_ns: hist.value_at_percentile(99.9),
         max_ns: hist.max(),

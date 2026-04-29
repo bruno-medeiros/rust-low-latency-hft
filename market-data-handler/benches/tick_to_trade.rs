@@ -29,7 +29,8 @@ use bench_tool::{
     LatencyScenario, LatencyStats, alloc_stats_from_basic_stats, core_pinning_disabled_by_env,
 };
 use limit_order_book::LimitOrderBookV1;
-use market_data_handler::{LatencyRecorder, MarketHandlerPipeline, PipelineConfig, PipelineResult, itch::{Side, encode}, mold_udp64::{SESSION_LEN, encode_packet}, PipelineError};
+use hdrhistogram::Histogram;
+use market_data_handler::{MarketHandlerPipeline, PipelineConfig, PipelineResult, itch::{Side, encode}, mold_udp64::{SESSION_LEN, encode_packet}, PipelineError};
 
 const N_MESSAGES: usize = 50_000;
 const SESSION: &[u8; SESSION_LEN] = b"BENCH     ";
@@ -65,17 +66,16 @@ fn pipeline_config(pin_enabled: bool, pin_core: u32) -> PipelineConfig {
     }
 }
 
-fn latency_stats(lat: &LatencyRecorder) -> LatencyStats {
+fn latency_stats(lat: &Histogram<u64>) -> LatencyStats {
     LatencyStats {
-        min_ns: lat.min_ns(),
-        p50_ns: lat.p50_ns(),
-        p90_ns: lat.p90_ns(),
-        p95_ns: lat.p95_ns(),
-        p99_ns: lat.p99_ns(),
-        p999_ns: lat.p999_ns(),
-        max_ns: lat.max_ns(),
-        mean_ns: lat.mean_ns(),
-        stdev_ns: lat.stdev_ns(),
+        min_ns: lat.min(),
+        p50_ns: lat.value_at_percentile(50.0),
+        p90_ns: lat.value_at_percentile(90.0),
+        p99_ns: lat.value_at_percentile(99.0),
+        p999_ns: lat.value_at_percentile(99.9),
+        max_ns: lat.max(),
+        mean_ns: lat.mean(),
+        stdev_ns: lat.stdev(),
     }
 }
 
@@ -189,7 +189,7 @@ fn run_scenario(
         let (pipeline_result, pipeline) = pipeline.run(rx_sock, done, book)?;
         let alloc_stats = region.change();
 
-        Ok::<_, PipelineError>((pipeline_result, pipeline.latency, alloc_stats))
+        Ok::<_, PipelineError>((pipeline_result, pipeline.latency.hist, alloc_stats))
     });
 
     input_sender_thread
@@ -197,12 +197,12 @@ fn run_scenario(
         .expect("sender join");
 
     let (pipeline_result, latency, alloc_stats) = pipeline_handle.join().expect("pipeline join")?;
-    let samples = latency.sample_count();
+    let samples = latency.len();
     let alloc_stats = alloc_stats_from_basic_stats(alloc_stats, samples);
 
     section.latency_scenarios.push(LatencyScenario {
         name: scenario_name.into(),
-        samples: latency.sample_count(),
+        samples: latency.len(),
         latency: latency_stats(&latency),
         allocations: alloc_stats.clone(),
     });

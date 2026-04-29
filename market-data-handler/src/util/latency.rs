@@ -12,7 +12,7 @@ pub type RawTs = u64;
 /// Records per-event tick-to-trade latency samples and reports percentiles.
 pub struct LatencyRecorder {
     clock: Clock,
-    pub(crate) hist: Histogram<u64>,
+    pub hist: Histogram<u64>,
 }
 
 impl LatencyRecorder {
@@ -42,46 +42,6 @@ impl LatencyRecorder {
         let clamped = nanos.min(self.hist.high());
         let _ = self.hist.record(clamped);
     }
-
-    pub fn sample_count(&self) -> u64 {
-        self.hist.len()
-    }
-
-    pub fn min_ns(&self) -> u64 {
-        self.hist.min()
-    }
-
-    pub fn p50_ns(&self) -> u64 {
-        self.hist.value_at_percentile(50.0)
-    }
-
-    pub fn p90_ns(&self) -> u64 {
-        self.hist.value_at_percentile(90.0)
-    }
-
-    pub fn p95_ns(&self) -> u64 {
-        self.hist.value_at_percentile(95.0)
-    }
-
-    pub fn p99_ns(&self) -> u64 {
-        self.hist.value_at_percentile(99.0)
-    }
-
-    pub fn p999_ns(&self) -> u64 {
-        self.hist.value_at_percentile(99.9)
-    }
-
-    pub fn max_ns(&self) -> u64 {
-        self.hist.max()
-    }
-
-    pub fn mean_ns(&self) -> f64 {
-        self.hist.mean()
-    }
-
-    pub fn stdev_ns(&self) -> f64 {
-        self.hist.stdev()
-    }
 }
 
 impl Default for LatencyRecorder {
@@ -101,8 +61,8 @@ mod tests {
         std::hint::black_box(0u64.wrapping_add(1)); // trivial work
         let t1 = rec.now();
         rec.record(t0, t1);
-        assert_eq!(rec.sample_count(), 1);
-        assert!(rec.max_ns() > 0);
+        assert_eq!(rec.hist.len(), 1);
+        assert!(rec.hist.max() > 0);
     }
 
     #[test]
@@ -112,7 +72,7 @@ mod tests {
         // HDR histogram rounds to bucket boundaries, so max may be slightly above high().
         let ceiling = rec.hist.high();
         let _ = rec.hist.record(ceiling);
-        assert!(rec.max_ns() >= ceiling);
-        assert_eq!(rec.sample_count(), 1);
+        assert!(rec.hist.max() >= ceiling);
+        assert_eq!(rec.hist.len(), 1);
     }
 }
