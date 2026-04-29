@@ -7,7 +7,7 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 ### [limit-order-book](limit-order-book/README.md)
 
 - a high-performance limit order book engine optimized for low-latency matching, with nanosecond-level benchmarks.
-  - **p99 add: ≈80ns | p99 cancel: ≈80ns | throughput: 44M ops/sec | zero heap allocations on the hot path**
+  - **p99 add: ≈60ns | p99 cancel: ≈80ns | throughput: 44M ops/sec | zero heap allocations on the hot path**
   - Full results: [LOB benchmark report](bench-results/v1/lob.md) — latency percentiles (min → p99.9), throughput, allocation tracking, flamegraph, and comparison vs v0 (baseline). 
 
 ### [market-data-handler](market-data-handler/README.md)

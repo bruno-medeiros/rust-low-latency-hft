@@ -3,12 +3,12 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-03-24T18:20:25Z |
+| Timestamp | 2026-04-29T13:40:39Z |
 | CPU | AMD Ryzen 7 7800X3D 8-Core Processor |
 | Cores | 16 |
 | Memory | 30.5 GB |
 | OS | Linux Mint 22.3 (x86_64) |
-| Host | mint |
+| Host | bruno-linux |
 | Rust | rustc 1.91.1 (ed61e7d7e 2025-11-07) |
 | Clock | TSC (RDTSC via quanta) |
 | ASLR | disabled (randomize_va_space=0) |
@@ -22,33 +22,34 @@
 
 | Property | Value |
 |----------|-------|
-| BENCH_ITERS | 100000 |
-| Default pinned core | pin core 2 |
-| WARMUP_ITERS | 10000 |
 | book_levels | 100 |
 | orders_per_level | 10 |
+| BENCH_ITERS | 100000 |
+| WARMUP_ITERS | 10000 |
+| Default pinned core | pin core 2 |
 
 ### Latency
 
 | Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Add (passive) | 40ns | 50ns | 60ns | 90ns | 110ns | 911ns | 54ns | 10ns | 1.0 | 0.0 | 32B |
-| Add (sweep 5 levels, 50 fills) | 1.3μs | 1.4μs | 1.5μs | 1.6μs | 1.8μs | 5.7μs | 1.4μs | 50ns | 0.0 | 6.0 | 0B |
-| Market (sweep 10 levels, 100 fills) | 2.7μs | 2.8μs | 2.9μs | 3.1μs | 3.3μs | 8.3μs | 2.9μs | 77ns | 0.0 | 14.0 | 0B |
-| Cancel (head of queue) | 30ns | 40ns | 50ns | 70ns | 160ns | 350ns | 41ns | 10ns | 0.0 | 0.0 | 0B |
-| Cancel (tail of queue) | 150ns | 160ns | 160ns | 170ns | 180ns | 200ns | 159ns | 4ns | 0.0 | 0.0 | 0B |
-| Spread (BBO query) | 1ns | 10ns | 10ns | 10ns | 20ns | 60ns | 9ns | 2ns | 0.0 | 0.0 | 0B |
-| Depth (top 5) | 40ns | 50ns | 60ns | 60ns | 310ns | 571ns | 54ns | 13ns | 1.0 | 1.0 | 80B |
-| Order lookup (hit) | 10ns | 30ns | 30ns | 40ns | 140ns | 330ns | 26ns | 7ns | 0.0 | 0.0 | 0B |
-| Realistic mix (per-op) | 10ns | 60ns | 90ns | 110ns | 190ns | 511ns | 62ns | 19ns | 0.4 | 0.0 | 13B |
+| Add (passive) | 40ns | 50ns | 60ns | 90ns | 120ns | 360ns | 51ns | 9ns | 1.0 | 0.0 | 32B |
+| Add (sweep 5 levels, 50 fills) | 1.3μs | 1.5μs | 1.5μs | 1.6μs | 2.4μs | 3.1μs | 1.5μs | 76ns | 0.0 | 6.0 | 0B |
+| Market (sweep 10 levels, 100 fills) | 2.7μs | 2.9μs | 3.1μs | 3.4μs | 4.1μs | 4.9μs | 2.9μs | 126ns | 0.0 | 14.0 | 0B |
+| Cancel (head of queue) | 30ns | 50ns | 60ns | 80ns | 440ns | 601ns | 55ns | 25ns | 0.0 | 0.0 | 0B |
+| Cancel (tail of queue) | 150ns | 160ns | 160ns | 170ns | 180ns | 280ns | 157ns | 5ns | 0.0 | 0.0 | 0B |
+| Reduce (partial) | 20ns | 30ns | 40ns | 40ns | 50ns | 350ns | 33ns | 5ns | 0.0 | 0.0 | 0B |
+| Spread (BBO query) | 1ns | 10ns | 10ns | 20ns | 110ns | 300ns | 9ns | 6ns | 0.0 | 0.0 | 0B |
+| Depth (top 5) | 20ns | 40ns | 50ns | 60ns | 210ns | 500ns | 42ns | 12ns | 1.0 | 1.0 | 80B |
+| Order lookup (hit) | 1ns | 10ns | 20ns | 20ns | 30ns | 230ns | 11ns | 4ns | 0.0 | 0.0 | 0B |
+| Realistic mix (per-op) | 10ns | 60ns | 100ns | 110ns | 470ns | 801ns | 64ns | 31ns | 0.4 | 0.0 | 13B |
 
 ## Throughput (realistic mix)
 
 | Property | Value |
 |----------|-------|
-| Default pinned core | pin core 2 |
 | book_levels | 100 |
 | orders_per_level | 10 |
+| Default pinned core | pin core 2 |
 
 ### Throughput
 

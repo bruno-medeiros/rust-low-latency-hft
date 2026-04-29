@@ -3,12 +3,12 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-03-24T18:33:39Z |
+| Timestamp | 2026-04-29T13:54:55Z |
 | CPU | AMD Ryzen 7 7800X3D 8-Core Processor |
 | Cores | 16 |
 | Memory | 30.5 GB |
 | OS | Linux Mint 22.3 (x86_64) |
-| Host | mint |
+| Host | bruno-linux |
 | Rust | rustc 1.91.1 (ed61e7d7e 2025-11-07) |
 | Clock | TSC (RDTSC via quanta) |
 | ASLR | disabled (randomize_va_space=0) |
@@ -22,10 +22,10 @@
 
 | Property | Value |
 |----------|-------|
-| consumer_pin_core | pin core 3 |
-| producer_pin_core | pin core 2 |
-| queue_slots | 4096 |
 | sample | LOBSTER_SampleFiles/GOOG_2012-06-21_34200000_57600000_message_1.csv |
+| queue_slots | 4096 |
+| producer_pin_core | pin core 2 |
+| consumer_pin_core | pin core 3 |
 
 ### Throughput
 
