@@ -19,9 +19,9 @@ use thiserror::Error;
 
 use crate::itch::{ItchDecoder, ItchMessage};
 use crate::itch_to_book::ItchToBookAdapter;
-use crate::mold_udp64;
+use crate::mold_udp64::{self, DecodedPacket};
 use crate::outbound::OutboundBuf;
-use crate::reorder::{OrderedDatagram, PushError, ReorderBuffer, ReorderStats};
+use crate::reorder::{PushError, ReorderBuffer, ReorderStats};
 use crate::strategy::QuoterState;
 use crate::udp_receiver::UdpReceiver;
 use crate::util::latency::{LatencyRecorder, RawTs};
@@ -142,15 +142,22 @@ impl MarketHandlerPipeline {
                 let seq = packet.header.seq;
                 let t0 = self.latency.now();
 
-                self.reorder.push(seq, buf.as_slice(), t0)?;
+                if seq == self.reorder.next_expected() {
+                    self.reorder.advance_in_order();
+                    self.process_next_message(packet, t0, &mut book, &mut messages_decoded, &mut orders_emitted);
+                } else {
+                    self.reorder.push(seq, buf.as_slice(), t0)?;
+                }
 
                 while let Some(d) = self.reorder.pop_ready() {
+                    let packet = mold_udp64::decode_packet(d.as_slice())?;
                     self.process_next_message(
-                        d,
+                        packet,
+                        d.t0,
                         &mut book,
                         &mut messages_decoded,
                         &mut orders_emitted,
-                    )?;
+                    );
                 }
             }
         }
@@ -165,22 +172,20 @@ impl MarketHandlerPipeline {
 
     fn process_next_message<B: LimitOrderBook>(
         &mut self,
-        datagram: OrderedDatagram,
+        packet: DecodedPacket<'_>,
+        t0: RawTs,
         book: &mut B,
         messages_decoded: &mut u64,
         orders_emitted: &mut u64,
-    ) -> Result<(), PipelineError> {
-        let t0 = datagram.t0;
-        let packet = mold_udp64::decode_packet(datagram.as_slice())?;
+    ) {
         let mold_udp64::PacketKind::Messages(msg_iter) = packet.kind else {
-            return Ok(());
+            return;
         };
         for msg_slice in msg_iter {
             if let Ok(Some((msg, _consumed))) = self.decoder.pop_message(msg_slice) {
                 self.process_itch_message(&msg, t0, book, messages_decoded, orders_emitted);
             }
         }
-        Ok(())
     }
 
     fn process_itch_message<B: LimitOrderBook>(

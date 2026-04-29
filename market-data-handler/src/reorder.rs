@@ -192,6 +192,12 @@ impl ReorderBuffer {
         Ok(outcome)
     }
 
+    /// Advance `next_expected` by one without inserting anything into the ring.
+    pub fn advance_in_order(&mut self) {
+        self.next_expected += 1;
+        self.start = (self.start + 1) % self.window;
+    }
+
     pub fn stats(&self) -> ReorderStats {
         self.stats
     }
