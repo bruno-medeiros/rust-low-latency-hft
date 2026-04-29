@@ -4,6 +4,9 @@
 //! Numeric fields are little-endian.
 
 use thiserror::Error;
+use zerocopy::byteorder::big_endian::U16 as U16Be;
+use zerocopy::byteorder::little_endian::{U32, U64};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 #[derive(Debug, Error)]
 pub enum IngestError {
@@ -54,6 +57,27 @@ const MSG_SYSTEM_EVENT: u8 = 0;
 const MSG_ADD_ORDER: u8 = 1;
 const MSG_ORDER_EXECUTED: u8 = 2;
 const MSG_ORDER_CANCELED: u8 = 3;
+
+/// Fixed-size head of an `AddOrder` payload (everything before the variable-length symbol).
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C, packed)]
+struct AddOrderFixed {
+    oid: U64,
+    side: u8,
+    qty: U32,
+    price: U32,
+    sym_len: U16Be,
+}
+const _: () = assert!(core::mem::size_of::<AddOrderFixed>() == 19);
+
+/// Shared layout for `OrderExecuted` and `OrderCanceled` payloads.
+#[derive(FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C, packed)]
+struct OidQty {
+    oid: U64,
+    qty: U32,
+}
+const _: () = assert!(core::mem::size_of::<OidQty>() == 12);
 
 /// Decoder for ITCH-style messages (length-prefixed, big-endian length).
 pub struct ItchDecoder;
@@ -110,54 +134,55 @@ fn decode_system_event(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
 }
 
 fn decode_add_order(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
-    // oid:8 + side:1 + qty:4 + price:4 + sym_len:2 = 19
-    if payload.len() < 19 {
-        return Err(DecodeError::truncated(19, payload.len()));
-    }
-    let oid = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    let side = match payload[8] {
+    let (fixed, rest) = AddOrderFixed::ref_from_prefix(payload)
+        .map_err(|_| DecodeError::truncated(size_of::<AddOrderFixed>(), payload.len()))?;
+    let side = match fixed.side {
         0 => Side::Buy,
         1 => Side::Sell,
-        _ => return Err(DecodeError::InvalidMessageType(payload[8])),
+        b => return Err(DecodeError::InvalidMessageType(b)),
     };
-    let qty = u32::from_le_bytes(payload[9..13].try_into().unwrap());
-    let price = u32::from_le_bytes(payload[13..17].try_into().unwrap());
-    let sym_len = u16::from_be_bytes([payload[17], payload[18]]) as usize;
-    if payload.len() < 19 + sym_len {
-        return Err(DecodeError::truncated(19 + sym_len, payload.len()));
+    let sym_len = fixed.sym_len.get() as usize;
+    if rest.len() < sym_len {
+        return Err(DecodeError::truncated(
+            size_of::<AddOrderFixed>() + sym_len,
+            payload.len(),
+        ));
     }
-    let symbol =
-        std::str::from_utf8(&payload[19..19 + sym_len]).map_err(|_| DecodeError::InvalidUtf8)?;
+    let symbol = std::str::from_utf8(&rest[..sym_len]).map_err(|_| DecodeError::InvalidUtf8)?;
     Ok(ItchMessage::AddOrder {
-        oid,
+        oid: fixed.oid.get(),
         side,
-        qty,
-        price,
+        qty: fixed.qty.get(),
+        price: fixed.price.get(),
         symbol,
     })
 }
 
 fn decode_order_executed(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
-    if payload.len() < 12 {
-        return Err(DecodeError::truncated(12, payload.len()));
-    }
-    let oid = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    let qty = u32::from_le_bytes(payload[8..12].try_into().unwrap());
-    Ok(ItchMessage::OrderExecuted { oid, qty })
+    let (h, _) = OidQty::ref_from_prefix(payload)
+        .map_err(|_| DecodeError::truncated(size_of::<OidQty>(), payload.len()))?;
+    Ok(ItchMessage::OrderExecuted {
+        oid: h.oid.get(),
+        qty: h.qty.get(),
+    })
 }
 
 fn decode_order_canceled(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
-    if payload.len() < 12 {
-        return Err(DecodeError::truncated(12, payload.len()));
-    }
-    let oid = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    let qty = u32::from_le_bytes(payload[8..12].try_into().unwrap());
-    Ok(ItchMessage::OrderCanceled { oid, qty })
+    let (h, _) = OidQty::ref_from_prefix(payload)
+        .map_err(|_| DecodeError::truncated(size_of::<OidQty>(), payload.len()))?;
+    Ok(ItchMessage::OrderCanceled {
+        oid: h.oid.get(),
+        qty: h.qty.get(),
+    })
 }
 
 /// Encode ITCH-style messages for testing and replay.
 pub mod encode {
+    use super::{AddOrderFixed, OidQty};
     use crate::itch::Side;
+    use zerocopy::IntoBytes;
+    use zerocopy::byteorder::big_endian::U16 as U16Be;
+    use zerocopy::byteorder::little_endian::{U32, U64};
 
     const MSG_SYSTEM_EVENT: u8 = 0;
     const MSG_ADD_ORDER: u8 = 1;
@@ -165,7 +190,7 @@ pub mod encode {
 
     pub fn encode_system_event(text: &str) -> Vec<u8> {
         let text_bytes = text.as_bytes();
-        let payload_len = 1 + 2 + text_bytes.len(); // type + text_len + text
+        let payload_len = 1 + 2 + text_bytes.len();
         let mut buf = Vec::with_capacity(2 + payload_len);
         buf.extend_from_slice(&(payload_len as u16).to_be_bytes());
         buf.push(MSG_SYSTEM_EVENT);
@@ -176,29 +201,35 @@ pub mod encode {
 
     pub fn encode_add_order(oid: u64, side: Side, qty: u32, price: u32, symbol: &str) -> Vec<u8> {
         let sym_bytes = symbol.as_bytes();
-        let payload_len = 1 + 19 + sym_bytes.len(); // type + fields + symbol
+        let payload_len = 1 + size_of::<AddOrderFixed>() + sym_bytes.len();
         let mut buf = Vec::with_capacity(2 + payload_len);
         buf.extend_from_slice(&(payload_len as u16).to_be_bytes());
         buf.push(MSG_ADD_ORDER);
-        buf.extend_from_slice(&oid.to_le_bytes());
-        buf.push(match side {
-            Side::Buy => 0,
-            Side::Sell => 1,
-        });
-        buf.extend_from_slice(&qty.to_le_bytes());
-        buf.extend_from_slice(&price.to_le_bytes());
-        buf.extend_from_slice(&(sym_bytes.len() as u16).to_be_bytes());
+        let fixed = AddOrderFixed {
+            oid: U64::new(oid),
+            side: match side {
+                Side::Buy => 0,
+                Side::Sell => 1,
+            },
+            qty: U32::new(qty),
+            price: U32::new(price),
+            sym_len: U16Be::new(sym_bytes.len() as u16),
+        };
+        buf.extend_from_slice(fixed.as_bytes());
         buf.extend_from_slice(sym_bytes);
         buf
     }
 
     pub fn encode_order_canceled(oid: u64, qty: u32) -> Vec<u8> {
-        let payload_len = 1 + 12; // type + oid:8 + qty:4
+        let payload_len = 1 + size_of::<OidQty>();
         let mut buf = Vec::with_capacity(2 + payload_len);
         buf.extend_from_slice(&(payload_len as u16).to_be_bytes());
         buf.push(MSG_ORDER_CANCELED);
-        buf.extend_from_slice(&oid.to_le_bytes());
-        buf.extend_from_slice(&qty.to_le_bytes());
+        let body = OidQty {
+            oid: U64::new(oid),
+            qty: U32::new(qty),
+        };
+        buf.extend_from_slice(body.as_bytes());
         buf
     }
 }

@@ -7,11 +7,32 @@
 //!   [msg_type: u8][oid: u64][side: u8][price: u32][qty: u32] = 18 bytes
 
 use limit_order_book::types::Side;
+use zerocopy::byteorder::little_endian;
+use zerocopy::{Immutable, IntoBytes, KnownLayout, Unaligned};
 
 pub const OUTBOUND_LEN: usize = 18;
 
 const MSG_NEW_ORDER: u8 = 0x01;
 const MSG_CANCEL_ORDER: u8 = 0x02;
+
+#[derive(IntoBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C, packed)]
+struct NewOrderWire {
+    msg_type: u8,
+    oid: little_endian::U64,
+    side: u8,
+    price: little_endian::U32,
+    qty: little_endian::U32,
+}
+const _: () = assert!(core::mem::size_of::<NewOrderWire>() == OUTBOUND_LEN);
+
+#[derive(IntoBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C, packed)]
+struct CancelOrderWire {
+    msg_type: u8,
+    oid: little_endian::U64,
+}
+const CANCEL_LEN: usize = size_of::<CancelOrderWire>();
 
 /// A fixed-size stack buffer holding one encoded outbound order message.
 #[derive(Clone, Copy)]
@@ -30,15 +51,17 @@ impl OutboundBuf {
     /// Encode a new-order message into `self`. Returns the filled byte slice.
     #[inline]
     pub fn encode_new_order(&mut self, oid: u64, side: Side, price: u32, qty: u32) -> &[u8] {
-        let b = &mut self.bytes;
-        b[0] = MSG_NEW_ORDER;
-        b[1..9].copy_from_slice(&oid.to_le_bytes());
-        b[9] = match side {
-            Side::Buy => 0,
-            Side::Sell => 1,
+        let wire = NewOrderWire {
+            msg_type: MSG_NEW_ORDER,
+            oid: little_endian::U64::new(oid),
+            side: match side {
+                Side::Buy => 0,
+                Side::Sell => 1,
+            },
+            price: little_endian::U32::new(price),
+            qty: little_endian::U32::new(qty),
         };
-        b[10..14].copy_from_slice(&price.to_le_bytes());
-        b[14..18].copy_from_slice(&qty.to_le_bytes());
+        self.bytes[..OUTBOUND_LEN].copy_from_slice(wire.as_bytes());
         self.len = OUTBOUND_LEN;
         &self.bytes[..OUTBOUND_LEN]
     }
@@ -46,12 +69,13 @@ impl OutboundBuf {
     /// Encode a cancel-order message into `self`. Returns the filled byte slice.
     #[inline]
     pub fn encode_cancel_order(&mut self, oid: u64) -> &[u8] {
-        let b = &mut self.bytes;
-        b[0] = MSG_CANCEL_ORDER;
-        b[1..9].copy_from_slice(&oid.to_le_bytes());
-        // remaining fields unused for cancel
-        self.len = 9;
-        &self.bytes[..9]
+        let wire = CancelOrderWire {
+            msg_type: MSG_CANCEL_ORDER,
+            oid: little_endian::U64::new(oid),
+        };
+        self.bytes[..CANCEL_LEN].copy_from_slice(wire.as_bytes());
+        self.len = CANCEL_LEN;
+        &self.bytes[..CANCEL_LEN]
     }
 
     pub fn as_slice(&self) -> &[u8] {

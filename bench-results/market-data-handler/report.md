@@ -3,7 +3,7 @@
 
 | Property | Value |
 |----------|-------|
-| Timestamp | 2026-04-29T13:54:59Z |
+| Timestamp | 2026-04-29T15:36:20Z |
 | CPU | AMD Ryzen 7 7800X3D 8-Core Processor |
 | Cores | 16 |
 | Memory | 30.5 GB |
@@ -38,7 +38,7 @@
 
 | Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| In-order packets | 30ns | 40ns | 50ns | 1.6μs | 2.0μs | 7.6μs | 78ns | 272ns | 0.0 | 0.0 | 2B |
+| In-order packets | 30ns | 40ns | 50ns | 1.5μs | 2.7μs | 10.8μs | 76ns | 263ns | 0.0 | 0.0 | 2B |
 
 ## Tick-to-trade pipeline (out of order inbound)
 
@@ -56,5 +56,5 @@
 
 | Operation | min | p50 | p90 | p99 | p99.9 | max | mean | stdev | allocs/op | deallocs/op | bytes/op |
 |-----------|-----|-----|-----|-----|-------|-----|------|-------|-----------|-------------|----------|
-| Out-of-order inbound | 30ns | 50ns | 400ns | 170.9μs | 175.6μs | 180.1μs | 2.4μs | 19.2μs | 0.0 | 0.0 | 2B |
+| Out-of-order inbound | 29ns | 40ns | 400ns | 170.8μs | 175.0μs | 176.3μs | 2.4μs | 19.2μs | 0.0 | 0.0 | 2B |
 

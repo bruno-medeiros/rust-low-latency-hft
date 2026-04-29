@@ -36,6 +36,14 @@ the hot path — book updates and strategy decisions are inline, as in productio
 feed handlers. A side-channel (SPSC journal, fan-out) can be added off-path without
 touching the latency-critical loop.
 
+## Wire-format decoding (`zerocopy`)
+
+The MoldUDP64 packet header and the fixed-size prefixes of the ITCH-style
+messages (`AddOrder`, `OrderExecuted`, `OrderCanceled`) are parsed via a single
+[`zerocopy`](https://docs.rs/zerocopy) reinterpret of the receive buffer rather
+than field-by-field `from_*_bytes` copies. The same wire structs are reused on
+the encode side (replay sender + outbound order encoder).
+
 ## Tick-to-trade definition
 
 | Point | Definition |

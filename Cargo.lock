@@ -498,6 +498,7 @@ dependencies = [
  "limit-order-book",
  "quanta",
  "thiserror",
+ "zerocopy",
 ]
 
 [[package]]

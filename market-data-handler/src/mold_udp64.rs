@@ -1,32 +1,11 @@
 //! MoldUDP64 framing — closely following the Nasdaq MoldUDP64 specification v0.00.09.
 //!
-//! ## Wire format
-//!
-//! ```text
-//! ┌──────────────────────────────────────────────────────────┐
-//! │ session    : [u8; 10]  ASCII, right-padded with spaces   │
-//! │ seq        : u64 BE    first message's sequence number   │
-//! │ msg_count  : u16 BE    0 = heartbeat, 0xFFFF = end-of-session │
-//! ├──────────────────────────────────────────────────────────┤
-//! │ msg_len    : u16 BE  ┐                                   │
-//! │ msg_bytes  : [u8]    │ × msg_count  (absent for heartbeat / end-of-session)
-//! └──────────────────────────────────────────────────────────┘
-//! ```
-//!
-//! ## Spec conformance
-//!
-//! | Feature              | Nasdaq spec               | This implementation             |
-//! |----------------------|---------------------------|---------------------------------|
-//! | Session identifier   | 10-byte ASCII             | ✓ `PacketHeader::session`       |
-//! | Byte order           | Big-endian                | ✓ big-endian throughout         |
-//! | Heartbeat            | `msg_count = 0`           | ✓ `PacketKind::Heartbeat`       |
-//! | End-of-session       | `msg_count = 0xFFFF`      | ✓ `PacketKind::EndOfSession`    |
-//! | Gap recovery channel | TCP retransmit request    | ✗ gap detection only (out of scope) |
-//!
 //! The decoder yields zero-copy slices into the caller's receive buffer.
 //! The encoder allocates; it is intended for the replay sender, not the hot path.
 
 use thiserror::Error;
+use zerocopy::byteorder::big_endian;
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 /// Failure to decode MoldUDP64 wire bytes (e.g. truncated header).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -82,20 +61,30 @@ pub struct DecodedPacket<'a> {
     pub kind: PacketKind<'a>,
 }
 
+/// On-wire MoldUDP64 packet header. `repr(C, packed)` matches the wire layout exactly,
+/// and the byteorder-tagged primitives encode the big-endian convention at the type level.
+#[derive(Debug, Clone, Copy, FromBytes, IntoBytes, Immutable, KnownLayout, Unaligned)]
+#[repr(C, packed)]
+pub struct WireHeader {
+    pub session: [u8; SESSION_LEN],
+    pub seq: big_endian::U64,
+    pub msg_count: big_endian::U16,
+}
+
+const _: () = assert!(core::mem::size_of::<WireHeader>() == HEADER_LEN);
+
 /// Parse only the 20-byte packet header.
 pub fn parse_header(buf: &[u8]) -> Result<PacketHeader, MoldDecodeError> {
-    if buf.len() < HEADER_LEN {
-        return Err(MoldDecodeError::HeaderTruncated {
+    let (wire, _rest) = WireHeader::ref_from_prefix(buf).map_err(|_| {
+        MoldDecodeError::HeaderTruncated {
             needed: HEADER_LEN,
             have: buf.len(),
-        });
-    }
-    let mut session = [0u8; SESSION_LEN];
-    session.copy_from_slice(&buf[0..SESSION_LEN]);
+        }
+    })?;
     Ok(PacketHeader {
-        session,
-        seq: u64::from_be_bytes(buf[SESSION_LEN..SESSION_LEN + 8].try_into().unwrap()),
-        msg_count: u16::from_be_bytes(buf[SESSION_LEN + 8..HEADER_LEN].try_into().unwrap()),
+        session: wire.session,
+        seq: wire.seq.get(),
+        msg_count: wire.msg_count.get(),
     })
 }
 
@@ -127,19 +116,17 @@ pub fn encode_packet(session: &[u8; SESSION_LEN], seq: u64, itch_messages: &[&[u
     );
     let body_len: usize = itch_messages.iter().map(|m| MSG_LEN_PREFIX + m.len()).sum();
     let mut buf = Vec::with_capacity(HEADER_LEN + body_len);
-    write_header(&mut buf, session, seq, msg_count);
+    let header = WireHeader {
+        session: *session,
+        seq: big_endian::U64::new(seq),
+        msg_count: big_endian::U16::new(msg_count),
+    };
+    buf.extend_from_slice(header.as_bytes());
     for msg in itch_messages {
         buf.extend_from_slice(&(msg.len() as u16).to_be_bytes());
         buf.extend_from_slice(msg);
     }
     buf
-}
-
-#[inline]
-fn write_header(buf: &mut Vec<u8>, session: &[u8; SESSION_LEN], seq: u64, msg_count: u16) {
-    buf.extend_from_slice(session);
-    buf.extend_from_slice(&seq.to_be_bytes());
-    buf.extend_from_slice(&msg_count.to_be_bytes());
 }
 
 /// Zero-copy iterator over ITCH message slices within a MoldUDP64 packet body.

@@ -11,6 +11,7 @@ libc = { workspace = true }
 core_affinity = { workspace = true }
 quanta = { workspace = true }
 hdrhistogram = { workspace = true }
+zerocopy = { workspace = true }
 
 [dev-dependencies]
 bench-tool = { workspace = true }
