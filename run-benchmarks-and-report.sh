@@ -59,7 +59,6 @@ echo "=== Benchmark: market-data-handler tick-to-trade (latency) ==="
 mkdir -p "$RESULTS_DIR/market-data-handler"
 cargo bench -p market-data-handler --bench tick_to_trade -- \
     "$@" \
-    --save-json "$RESULTS_DIR/market-data-handler/tick_to_trade.json" \
     --save-md "$RESULTS_DIR/market-data-handler/report.md"
 
 rm -f perf.data perf.data.old
