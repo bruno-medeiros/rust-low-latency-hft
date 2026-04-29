@@ -35,6 +35,7 @@ impl OrderedDatagram {
 }
 
 struct Slot {
+    occupied: bool,
     seq: u64,
     len: usize,
     data: DatagramBytes,
@@ -106,7 +107,7 @@ pub struct ReorderBuffer {
     next_expected: u64,
     /// Logical index of message at offset 0 in slots (`seq == next_expected`).
     start: usize,
-    slots: Vec<Option<Slot>>,
+    slots: Vec<Slot>,
 }
 
 impl ReorderBuffer {
@@ -117,7 +118,15 @@ impl ReorderBuffer {
             window,
             next_expected: first_seq,
             start: 0,
-            slots: (0..window).map(|_| None).collect(),
+            slots: (0..window)
+                .map(|_| Slot {
+                    occupied: false,
+                    seq: 0,
+                    len: 0,
+                    data: [0u8; BUF_SIZE],
+                    t0: 0,
+                })
+                .collect(),
         }
     }
 
@@ -157,44 +166,43 @@ impl ReorderBuffer {
         let arrived_ahead = dist > 0;
         let slots_index = (self.start + dist as usize) % self.window;
 
-        if let Some(existing) = &self.slots[slots_index] {
-            if existing.seq == seq {
+        if self.slots[slots_index].occupied {
+            if self.slots[slots_index].seq == seq {
                 return Ok(PushOutcome::DuplicateSeq);
             }
             unreachable!(
                 "reorder slot collision: seq {} but slot holds {}",
                 seq,
-                existing.seq
+                self.slots[slots_index].seq
             );
         }
 
-        // FIXME: optimize this
-        let mut data = [0u8; BUF_SIZE];
-        data[..src.len()].copy_from_slice(src);
-        self.slots[slots_index] = Some(Slot {
-            seq,
-            len: src.len(),
-            data,
-            t0,
-        });
+        let slot = &mut self.slots[slots_index];
+        slot.occupied = true;
+        slot.seq = seq;
+        slot.len = src.len();
+        slot.t0 = t0;
+        slot.data[..src.len()].copy_from_slice(src);
         Ok(PushOutcome::Buffered { arrived_ahead })
     }
 
     /// Remove the next contiguous ready datagram if `next_expected` is present; otherwise `None`.
     pub fn pop_ready(&mut self) -> Option<OrderedDatagram> {
-        let slot = self.slots[self.start].take()?;
-        debug_assert_eq!(
-            slot.seq, self.next_expected,
-            "slot seq mismatch at drain"
-        );
-        self.next_expected += 1;
-        self.start = (self.start + 1) % self.window;
-        Some(OrderedDatagram {
+        let slot = &mut self.slots[self.start];
+        if !slot.occupied {
+            return None;
+        }
+        debug_assert_eq!(slot.seq, self.next_expected, "slot seq mismatch at drain");
+        slot.occupied = false;
+        let datagram = OrderedDatagram {
             len: slot.len,
             // FIXME: optimize this
             bytes: slot.data,
             t0: slot.t0,
-        })
+        };
+        self.next_expected += 1;
+        self.start = (self.start + 1) % self.window;
+        Some(datagram)
     }
 }
 
