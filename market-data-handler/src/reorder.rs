@@ -108,6 +108,7 @@ pub struct ReorderBuffer {
     /// Logical index of message at offset 0 in slots (`seq == next_expected`).
     start: usize,
     slots: Vec<Slot>,
+    stats: ReorderStats,
 }
 
 impl ReorderBuffer {
@@ -127,6 +128,7 @@ impl ReorderBuffer {
                     t0: 0,
                 })
                 .collect(),
+            stats: ReorderStats::default(),
         }
     }
 
@@ -150,6 +152,7 @@ impl ReorderBuffer {
         }
 
         if seq < self.next_expected {
+            self.stats.record_push_ok(PushOutcome::LateDuplicate);
             return Ok(PushOutcome::LateDuplicate);
         }
 
@@ -168,6 +171,7 @@ impl ReorderBuffer {
 
         if self.slots[slots_index].occupied {
             if self.slots[slots_index].seq == seq {
+                self.stats.record_push_ok(PushOutcome::DuplicateSeq);
                 return Ok(PushOutcome::DuplicateSeq);
             }
             unreachable!(
@@ -183,7 +187,13 @@ impl ReorderBuffer {
         slot.len = src.len();
         slot.t0 = t0;
         slot.data[..src.len()].copy_from_slice(src);
-        Ok(PushOutcome::Buffered { arrived_ahead })
+        let outcome = PushOutcome::Buffered { arrived_ahead };
+        self.stats.record_push_ok(outcome);
+        Ok(outcome)
+    }
+
+    pub fn stats(&self) -> ReorderStats {
+        self.stats
     }
 
     /// Remove the next contiguous ready datagram if `next_expected` is present; otherwise `None`.

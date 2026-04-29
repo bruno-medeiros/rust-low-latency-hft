@@ -116,7 +116,6 @@ impl MarketHandlerPipeline {
         let mut packets_received: u64 = 0;
         let mut messages_decoded: u64 = 0;
         let mut orders_emitted: u64 = 0;
-        let mut reorder_stats = ReorderStats::default();
 
         loop {
             if done.load(Ordering::Relaxed) {
@@ -143,7 +142,7 @@ impl MarketHandlerPipeline {
                 let seq = packet.header.seq;
                 let t0 = self.latency.now();
 
-                reorder_stats.record_push_ok(self.reorder.push(seq, buf.as_slice(), t0)?);
+                self.reorder.push(seq, buf.as_slice(), t0)?;
 
                 while let Some(d) = self.reorder.pop_ready() {
                     self.process_next_message(
@@ -160,7 +159,7 @@ impl MarketHandlerPipeline {
             packets_received,
             messages_decoded,
             orders_emitted,
-            reorder_stats,
+            reorder_stats: self.reorder.stats(),
         }, self))
     }
 
