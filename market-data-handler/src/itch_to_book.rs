@@ -85,7 +85,6 @@ impl ItchToBookAdapter {
                 book.reduce_order(*oid, exec_qty, events);
                 Ok(FeedBookAction::AppliedReduce)
             }
-            ItchMessage::Trade { .. } => Err(FeedBookError::UnsupportedMessageKind),
         }
     }
 }

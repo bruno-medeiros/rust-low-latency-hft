@@ -48,15 +48,12 @@ pub enum ItchMessage<'a> {
     },
     OrderExecuted { oid: u64, qty: u32 },
     OrderCanceled { oid: u64, qty: u32 },
-    // TODO: review what this itch message will be needed for.
-    Trade { oid: u64, side: Side, qty: u32, price: u32 },
 }
 
 const MSG_SYSTEM_EVENT: u8 = 0;
 const MSG_ADD_ORDER: u8 = 1;
 const MSG_ORDER_EXECUTED: u8 = 2;
 const MSG_ORDER_CANCELED: u8 = 3;
-const MSG_TRADE: u8 = 4;
 
 /// Decoder for ITCH-style messages (length-prefixed, big-endian length).
 pub struct ItchDecoder;
@@ -87,7 +84,6 @@ impl ItchDecoder {
             MSG_ADD_ORDER => decode_add_order(payload)?,
             MSG_ORDER_EXECUTED => decode_order_executed(payload)?,
             MSG_ORDER_CANCELED => decode_order_canceled(payload)?,
-            MSG_TRADE => decode_trade(payload)?,
             t => return Err(DecodeError::InvalidMessageType(t)),
         };
         Ok(Some((msg, total_len)))
@@ -157,26 +153,6 @@ fn decode_order_canceled(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError>
     let oid = u64::from_le_bytes(payload[0..8].try_into().unwrap());
     let qty = u32::from_le_bytes(payload[8..12].try_into().unwrap());
     Ok(ItchMessage::OrderCanceled { oid, qty })
-}
-
-fn decode_trade(payload: &[u8]) -> Result<ItchMessage<'_>, DecodeError> {
-    if payload.len() < 17 {
-        return Err(DecodeError::truncated(17, payload.len()));
-    }
-    let oid = u64::from_le_bytes(payload[0..8].try_into().unwrap());
-    let side = match payload[8] {
-        0 => Side::Buy,
-        1 => Side::Sell,
-        _ => return Err(DecodeError::InvalidMessageType(payload[8])),
-    };
-    let qty = u32::from_le_bytes(payload[9..13].try_into().unwrap());
-    let price = u32::from_le_bytes(payload[13..17].try_into().unwrap());
-    Ok(ItchMessage::Trade {
-        oid,
-        side,
-        qty,
-        price,
-    })
 }
 
 /// Encode ITCH-style messages for testing and replay.
