@@ -40,7 +40,7 @@ touching the latency-critical loop.
 
 | Point | Definition |
 |---|---|
-| **T0** | `quanta::Clock::raw()` immediately after `recvmmsg()` returns (before decode/reorder processing). |
+| **T0** | `quanta::Clock::raw()` immediately after `recvmmsg()` returns (before `decode_packet()` and reorder processing). |
 | **T1** | `quanta::Clock::raw()` immediately before writing to `OutboundBuf` — order bytes encoded, ready for `sendto` |
 | **Latency** | `clock.delta_as_nanos(T0, T1)` — excludes kernel TX path |
 

@@ -135,12 +135,12 @@ impl MarketHandlerPipeline {
 
             for buf in batch {
                 packets_received += 1;
+                let t0 = self.latency.now();
                 let packet = match mold_udp64::decode_packet(buf.as_slice()) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
                 let seq = packet.header.seq;
-                let t0 = self.latency.now();
 
                 if seq == self.reorder.next_expected() {
                     self.reorder.advance_in_order();
