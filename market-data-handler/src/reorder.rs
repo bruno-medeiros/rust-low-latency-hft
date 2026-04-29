@@ -18,6 +18,7 @@ pub struct OrderedDatagram {
     bytes: DatagramBytes,
     /// `LatencyRecorder::now()` taken when this payload was copied into the buffer (T0).
     pub t0: RawTs,
+    sequence_span: u64,
 }
 
 impl OrderedDatagram {
@@ -32,6 +33,10 @@ impl OrderedDatagram {
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
+
+    pub fn sequence_span(&self) -> u64 {
+        self.sequence_span
+    }
 }
 
 struct Slot {
@@ -40,13 +45,12 @@ struct Slot {
     len: usize,
     data: DatagramBytes,
     t0: RawTs,
+    sequence_span: u64,
 }
 
 /// Failure when `seq` is too far ahead of the watermark for this window size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-#[error(
-    "sequence {seq} is beyond reorder window (next_expected={next_expected}, window={window})"
-)]
+#[error("sequence {seq} is beyond reorder window (next_expected={next_expected}, window={window})")]
 pub struct ReorderWindowExceeded {
     pub seq: u64,
     pub next_expected: u64,
@@ -126,6 +130,7 @@ impl ReorderBuffer {
                     len: 0,
                     data: [0u8; BUF_SIZE],
                     t0: 0,
+                    sequence_span: 0,
                 })
                 .collect(),
             stats: ReorderStats::default(),
@@ -142,6 +147,7 @@ impl ReorderBuffer {
         seq: u64,
         src: &[u8],
         t0: RawTs,
+        sequence_span: u64,
     ) -> Result<PushOutcome, PushError> {
         if src.len() > BUF_SIZE {
             return Err(PayloadTooLarge {
@@ -176,8 +182,7 @@ impl ReorderBuffer {
             }
             unreachable!(
                 "reorder slot collision: seq {} but slot holds {}",
-                seq,
-                self.slots[slots_index].seq
+                seq, self.slots[slots_index].seq
             );
         }
 
@@ -186,16 +191,16 @@ impl ReorderBuffer {
         slot.seq = seq;
         slot.len = src.len();
         slot.t0 = t0;
+        slot.sequence_span = sequence_span;
         slot.data[..src.len()].copy_from_slice(src);
         let outcome = PushOutcome::Buffered { arrived_ahead };
         self.stats.record_push_ok(outcome);
         Ok(outcome)
     }
 
-    /// Advance `next_expected` by one without inserting anything into the ring.
-    pub fn advance_in_order(&mut self) {
-        self.next_expected += 1;
-        self.start = (self.start + 1) % self.window;
+    /// Advance `next_expected` by `span` sequence numbers without inserting anything into the ring.
+    pub fn advance_in_order_by(&mut self, span: u64) {
+        self.advance_window(span);
     }
 
     pub fn stats(&self) -> ReorderStats {
@@ -215,10 +220,24 @@ impl ReorderBuffer {
             // FIXME: optimize this
             bytes: slot.data,
             t0: slot.t0,
+            sequence_span: slot.sequence_span,
         };
-        self.next_expected += 1;
-        self.start = (self.start + 1) % self.window;
+        self.advance_window(datagram.sequence_span);
         Some(datagram)
+    }
+
+    fn advance_window(&mut self, span: u64) {
+        debug_assert!(span > 0, "sequence span must be positive");
+        if span == 0 {
+            return;
+        }
+        let steps = span.min(self.window as u64);
+        for offset in 1..steps {
+            let idx = (self.start + offset as usize) % self.window;
+            self.slots[idx].occupied = false;
+        }
+        self.next_expected += span;
+        self.start = (self.start + (span as usize % self.window)) % self.window;
     }
 }
 
@@ -240,7 +259,7 @@ mod tests {
 
     fn push_seq(rb: &mut ReorderBuffer, seq: u64) -> Result<PushOutcome, PushError> {
         let b = [seq as u8; 4];
-        rb.push(seq, &b, seq)
+        rb.push(seq, &b, seq, 1)
     }
 
     #[test]
@@ -248,13 +267,22 @@ mod tests {
         let mut rb = ReorderBuffer::new(1, 8);
         assert!(matches!(
             push_seq(&mut rb, 3).unwrap(),
-            PushOutcome::Buffered { arrived_ahead: true }
+            PushOutcome::Buffered {
+                arrived_ahead: true
+            }
         ));
-        assert!(push_seq(&mut rb, 1).unwrap() == PushOutcome::Buffered { arrived_ahead: false });
+        assert!(
+            push_seq(&mut rb, 1).unwrap()
+                == PushOutcome::Buffered {
+                    arrived_ahead: false
+                }
+        );
         assert_eq!(rb.drain_ready().len(), 1);
         assert!(matches!(
             push_seq(&mut rb, 2).unwrap(),
-            PushOutcome::Buffered { arrived_ahead: false }
+            PushOutcome::Buffered {
+                arrived_ahead: false
+            }
         ));
         let drained = rb.drain_ready();
         assert_eq!(drained.len(), 2);
@@ -266,10 +294,7 @@ mod tests {
     #[test]
     fn late_packet_dropped() {
         let mut rb = ReorderBuffer::new(10, 4);
-        assert_eq!(
-            rb.push(9, &[1], 0).unwrap(),
-            PushOutcome::LateDuplicate
-        );
+        assert_eq!(rb.push(9, &[1], 0, 1).unwrap(), PushOutcome::LateDuplicate);
         assert!(rb.drain_ready().is_empty());
     }
 
@@ -277,16 +302,13 @@ mod tests {
     fn duplicate_seq_rejected() {
         let mut rb = ReorderBuffer::new(1, 8);
         push_seq(&mut rb, 2).unwrap();
-        assert_eq!(
-            push_seq(&mut rb, 2).unwrap(),
-            PushOutcome::DuplicateSeq
-        );
+        assert_eq!(push_seq(&mut rb, 2).unwrap(), PushOutcome::DuplicateSeq);
     }
 
     #[test]
     fn window_exceeded_err() {
         let mut rb = ReorderBuffer::new(0, 4);
-        let err = rb.push(4, &[], 0).unwrap_err();
+        let err = rb.push(4, &[], 0, 1).unwrap_err();
         assert!(matches!(
             err,
             PushError::WindowExceeded(ReorderWindowExceeded {
@@ -310,5 +332,21 @@ mod tests {
         push_seq(&mut rb, 4).unwrap();
         assert_eq!(rb.drain_ready().len(), 2);
         assert_eq!(rb.next_expected(), 6);
+    }
+
+    #[test]
+    fn advance_in_order_by_skips_message_sequence_span() {
+        let mut rb = ReorderBuffer::new(10, 8);
+        rb.advance_in_order_by(3);
+
+        assert_eq!(rb.next_expected(), 13);
+        assert!(matches!(
+            push_seq(&mut rb, 13).unwrap(),
+            PushOutcome::Buffered {
+                arrived_ahead: false
+            }
+        ));
+        assert_eq!(rb.drain_ready().len(), 1);
+        assert_eq!(rb.next_expected(), 14);
     }
 }

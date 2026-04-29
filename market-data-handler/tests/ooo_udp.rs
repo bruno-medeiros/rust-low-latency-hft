@@ -7,8 +7,8 @@ use std::thread;
 use std::time::Duration;
 
 use limit_order_book::LimitOrderBookV1;
-use market_data_handler::itch::encode;
 use market_data_handler::itch::Side;
+use market_data_handler::itch::encode;
 use market_data_handler::mold_udp64::{SESSION_LEN, encode_packet};
 use market_data_handler::{
     MarketHandlerPipeline, PipelineConfig, PipelineError, PipelineResult, PushError,
@@ -27,9 +27,29 @@ fn make_packets() -> Vec<Vec<u8>> {
         .collect()
 }
 
-fn run_with_order(order: Vec<usize>, reorder_window: usize) -> Result<PipelineResult, PipelineError> {
-    let packets = make_packets();
+fn make_multi_message_packets() -> Vec<Vec<u8>> {
+    (0..N)
+        .step_by(2)
+        .map(|i| {
+            let first = encode::encode_add_order(i as u64 + 1, Side::Buy, 1, 100, "SYM");
+            let second = encode::encode_add_order(i as u64 + 2, Side::Buy, 1, 100, "SYM");
+            encode_packet(SESSION, i as u64, &[&first, &second])
+        })
+        .collect()
+}
 
+fn run_with_order(
+    order: Vec<usize>,
+    reorder_window: usize,
+) -> Result<PipelineResult, PipelineError> {
+    run_packets_with_order(make_packets(), order, reorder_window)
+}
+
+fn run_packets_with_order(
+    packets: Vec<Vec<u8>>,
+    order: Vec<usize>,
+    reorder_window: usize,
+) -> Result<PipelineResult, PipelineError> {
     let rx = UdpSocket::bind("127.0.0.1:0").unwrap();
     let addr = rx.local_addr().unwrap();
     let tx = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -56,7 +76,9 @@ fn run_with_order(order: Vec<usize>, reorder_window: usize) -> Result<PipelineRe
     };
 
     let book = LimitOrderBookV1::new(config.price_range, config.order_capacity as usize);
-    MarketHandlerPipeline::from_config(config).run(rx, done, book).map(|(pr, _)| pr)
+    MarketHandlerPipeline::from_config(config)
+        .run(rx, done, book)
+        .map(|(pr, _)| pr)
 }
 
 #[test]
@@ -92,4 +114,14 @@ fn reorder_window_zero_reverse_fails_window_exceeded() {
         err,
         PipelineError::ReorderPush(PushError::WindowExceeded(_))
     ));
+}
+
+#[test]
+fn pipeline_advances_by_message_count_for_multi_message_datagrams() {
+    let packets = make_multi_message_packets();
+    let order: Vec<usize> = (0..packets.len()).collect();
+    let result = run_packets_with_order(packets, order, 4).expect("multi-message feed completes");
+
+    assert_eq!(result.messages_decoded, N as u64);
+    assert_eq!(result.reorder_stats.reorder_ahead_arrivals, 0);
 }
