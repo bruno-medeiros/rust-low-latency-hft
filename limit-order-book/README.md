@@ -38,10 +38,10 @@ All three structures are pre-allocated at startup. The matching hot path perform
 
 ### Latency distribution and Throughput (sustained mix)
 
-Run the workspace benchmark suite from the **repository root**:
+Run the LOB benchmark from the **repository root**:
 
 ```bash
-./run-benchmarks-and-report.sh
+cargo bench -p limit-order-book --bench lob
 ```
 
 Measures per-operation latency percentiles (min → p99.9) and heap allocations

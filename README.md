@@ -15,8 +15,8 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 - UDP-inbound market data handler with strategy stub, single-thread hot path, message re-ordering.
 - UDP RX → decode → reorder messages → book → strategy -> outbound pipeline, with zero allocations.
 - Benchmark measuring **tick-to-trade latency**:
-  - p90: ≈130ns | p99 ≈1.7μs 	
-  - Full results: [market-data-handler benchmark report](bench_results/market-data-handler) 
+  - in-order: p90: ≈50ns | p99 ≈1.6μs
+  - Full results: [market-data-handler benchmark report](bench-results/market-data-handler/report.md)
 
 ### [matching-pipeline](matching-pipeline/README.md)
 
@@ -31,7 +31,7 @@ A portfolio of Rust low-latency / HFT demos with reproducible latency/throughput
 ## Benchmarks
 
 ```bash
-# Apply tuning, run all benchmarks, then revert
+# Apply Linux OS tuning, run benchmarks, then revert
 sudo ./run-benchmarks-linux.sh
 
 # Or revert manually at any time

@@ -40,7 +40,7 @@ touching the latency-critical loop.
 
 | Point | Definition |
 |---|---|
-| **T0** | `quanta::Clock::raw()` when each datagram is copied into the reorder buffer (used when that datagram’s messages reach the quoter, including after buffered drain). |
+| **T0** | `quanta::Clock::raw()` immediately after `recvmmsg()` returns (before decode/reorder processing). |
 | **T1** | `quanta::Clock::raw()` immediately before writing to `OutboundBuf` — order bytes encoded, ready for `sendto` |
 | **Latency** | `clock.delta_as_nanos(T0, T1)` — excludes kernel TX path |
 
@@ -68,13 +68,3 @@ The benchmark:
    into an HDR histogram (feed is in-order on loopback).
 4. Reports percentile table via `bench-tool` in the same format as the other crates.
 
-### Sample results (untuned, Ryzen 7 7800X3D, powersave governor)
-
-| min | p50 | p90 | p99 | p99.9 | max |
-|---|---|---|---|---|---|
-| 70 ns | 3.5 μs | 6.2 μs | 12.0 μs | 52.6 μs | 87.4 μs |
-
-> Numbers above are from an untuned run (powersave CPU governor, no isolated cores, no
-> hugepages). With `isolcpus`, performance governor, and disabled turbo boost the p50 and
-> p99 drop significantly. See [Benchmark Methodology](../Benchmark-Methodology.md) and
-> `run-benchmarks-linux.sh` for the full tuning procedure.
